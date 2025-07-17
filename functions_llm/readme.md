@@ -1,1 +1,1 @@
-
+This module enables pattern generation by mapping natural-language prompts to Python functions: the LLM interprets the user’s request, extracts the necessary parameters, invokes the corresponding geometric routine, and returns the resulting path.
