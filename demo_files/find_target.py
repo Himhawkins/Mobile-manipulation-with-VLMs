@@ -36,7 +36,7 @@ def save_target_center(detection, width, height, filename="target.txt"):
     except IOError as e:
         print(f"Error writing to file {filename}: {e}")
 
-def find_target(prompt, camera_index, output_filename):
+def find_target(prompt, camera_index=4, output_filename="target.txt"):
     """
     Initializes a model, captures a single frame, finds an object based on a prompt,
     and saves the center coordinates of the first match.

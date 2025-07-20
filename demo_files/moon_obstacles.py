@@ -30,7 +30,7 @@ def dump_result(detections, width, height, filename="obstacles.txt"):
     except IOError as e:
         print(f"Error writing to file {filename}: {e}")
 
-def find_obstacles(object_prompt, camera_index, output_filename):
+def find_obstacles(object_prompt, camera_index=4, output_filename="obstacles.txt"):
     """
     Initializes the model, captures a single frame, performs object detection,
     and exits automatically.
