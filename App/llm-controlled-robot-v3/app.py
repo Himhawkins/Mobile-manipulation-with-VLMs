@@ -29,7 +29,7 @@ load_dotenv()
 ctk.set_appearance_mode("System")
 ctk.set_default_color_theme("blue")
 
-IMG_PATH = 'arena_img_test3.png'
+# IMG_PATH = 'arena_img_test3.png'
 
 class SettingsWindow(ctk.CTkToplevel):
     def __init__(self, master, app_instance):
@@ -419,10 +419,11 @@ class CameraApp(ctk.CTk):
 
                     cv2.polylines(frame_to_draw_on, [pts.astype(int)], isClosed=True, color=(0, 255, 0), thickness=2)
                     cv2.circle(frame_to_draw_on, (cx, cy), 3, (0, 0, 255), -1)
-                    cv2.putText(frame_to_draw_on, f"ID:{marker_id} ({cx},{cy})", (cx + 10, cy),
-                                cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
-                    cv2.putText(frame_to_draw_on, f"Angle: {angle_rad:.2f} rad", (cx + 10, cy + 30),
-                                cv2.FONT_HERSHEY_SIMPLEX, 0.6, (238, 244, 44), 2)
+                    # cv2.putText(frame_to_draw_on, f"ID:{marker_id} ({cx},{cy})", (cx + 10, cy),
+                    cv2.putText(frame_to_draw_on, f"ID:{marker_id}", (cx + 10, cy),
+                                cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 2)
+                    # cv2.putText(frame_to_draw_on, f"Angle: {angle_rad:.2f} rad", (cx + 10, cy + 30),
+                    #             cv2.FONT_HERSHEY_SIMPLEX, 0.6, (238, 244, 44), 2)
                     
     def start_camera_feed(self):
         if self.cap is not None and self.cap.isOpened():
@@ -438,10 +439,10 @@ class CameraApp(ctk.CTk):
 
     def update_video_feed(self):
         while not self.stop_video_thread:
-            # ret, frame = self.cap.read()
+            ret, frame = self.cap.read()
             # TESTING ONLY - REMOVE LATER
-            ret = True
-            frame = cv2.imread(IMG_PATH)
+            # ret = True
+            # frame = cv2.imread(IMG_PATH)
             # TESTING ONLY - REMOVE LATER
             if not ret:
                 print("Failed to grab frame")
@@ -499,6 +500,22 @@ class CameraApp(ctk.CTk):
             frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             self.corners, self.ids, _ = self.detector.detectMarkers(frame_copy)
             self.detect_aruco_bot(frame_to_draw_on=frame_rgb, aruco_id=self.target_marker_id)
+
+            # overlay detected letters with boxes
+            if hasattr(self, "alphabet_info") and self.alphabet_info:
+                for letter, (cx, cy), (x, y, w, h) in self.alphabet_info:
+                    # 1) draw a rectangle around the character
+                    cv2.rectangle(frame_rgb, (x, y), (x + w, y + h), (238, 244,  44), 2)
+                    # 2) draw the letter on top of the box (just above it if possible)
+                    text_y = y - 10 if y - 10 > 0 else y + h + 20
+                    cv2.putText(frame_rgb, letter, (x, text_y), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (238, 244,  44), 2, cv2.LINE_AA)
+                
+
+            if hasattr(self, "home_pos") and self.home_pos:
+                for label, (cx, cy), (x, y, w, h) in self.home_pos:
+                    cv2.rectangle(frame_rgb, (x, y), (x + w, y + h), (238, 244,  44), 2)
+                    text_y = y - 10 if y - 10 > 0 else y + h + 20
+                    cv2.putText(frame_rgb, label, (x, text_y), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (238, 244,  44), 2, cv2.LINE_AA)
 
             # --- display camera feed ---
             self.after(0, self._resize_and_update_label,
@@ -642,10 +659,10 @@ class CameraApp(ctk.CTk):
 
         current_frame = None
         if self.cap and self.cap.isOpened():
-            # ret, current_frame = self.cap.read()
+            ret, current_frame = self.cap.read()
             # TESTING ONLY - REMOVE LATER
-            ret = True
-            current_frame = cv2.imread(IMG_PATH)
+            # ret = True
+            # current_frame = cv2.imread(IMG_PATH)
             # TESTING ONLY - REMOVE LATER
             if not ret:
                 print("Failed to capture frame for pattern generation.")
@@ -1000,7 +1017,7 @@ class CameraApp(ctk.CTk):
 
         # 1) Generate Path using markers
         marker_target_dir = os.path.join("targets", "marker_track")
-        letter_map = {ltr:pos for ltr,pos in self.alphabet_info}
+        letter_map = {ltr:pos for ltr,pos,corners in self.alphabet_info}
         marker_target_points = generate_marker_track(
             sequence=seq,
             home_pos=self.home_pos,
@@ -1031,7 +1048,11 @@ class CameraApp(ctk.CTk):
 
         # 4) Draw the spline (polyline) on a frame
         #    (here using your test image—swap to live frame if desired)
-        frame = cv2.imread(IMG_PATH)
+        ret, frame = self.cap.read()
+        # TESTING ONLY - REMOVE LATER
+        # ret = True
+        # frame = cv2.imread(IMG_PATH)
+        # TESTING ONLY - REMOVE LATER
         pts_dicts = [{"x":x,"y":y,"theta":theta}
                         for x,y,theta in marker_target_points]
 
@@ -1050,10 +1071,10 @@ class CameraApp(ctk.CTk):
                 print("Error: Camera not running for calibration.")
                 return
             
-            # ret, frame = self.cap.read()
+            ret, frame = self.cap.read()
             # TESTING ONLY - REMOVE LATER
-            frame = cv2.imread(IMG_PATH)
-            ret = frame is not None
+            # frame = cv2.imread(IMG_PATH)
+            # ret = frame is not None
             # TESTING ONLY - REMOVE LATER
 
             if not ret or frame is None:
@@ -1080,7 +1101,7 @@ class CameraApp(ctk.CTk):
             # 2) Detect the Obstacles
             raw_obstacles = detect_and_list(frame, md_api_key, self.obstacles_prompt)
             # inflate by 120px
-            offset = 20
+            offset = 5
             h, w = frame.shape[:2]
             inflated = []
             for obs in raw_obstacles:
@@ -1361,10 +1382,10 @@ class CameraApp(ctk.CTk):
             generate_and_save_warped_plot(warp_save_path, warp_plot_save_path, self.warp_dims)
 
             # 3) Grab a frame to draw on            
-            # ret, frame = self.cap.read()
+            ret, frame = self.cap.read()
             # TESTING ONLY - REMOVE LATER
-            ret = True
-            frame = cv2.imread(IMG_PATH)
+            # ret = True
+            # frame = cv2.imread(IMG_PATH)
             # TESTING ONLY - REMOVE LATER
 
             # 4) Build the list of dicts for the overlay function
@@ -1428,9 +1449,12 @@ class CameraApp(ctk.CTk):
             # 3) Generate the warped‐arena plot
             generate_and_save_warped_plot(warped_txt, warped_plot, self.warp_dims)
 
-            # 4) Draw the spline (polyline) on a frame
-            #    (here using your test image—swap to live frame if desired)
-            frame = cv2.imread(IMG_PATH)
+            # 4) Draw the spline (polyline) on a frame (here using your test image—swap to live frame if desired)
+            ret, frame = self.cap.read()
+            # TESTING ONLY - REMOVE LATER
+            # ret = True
+            # frame = cv2.imread(IMG_PATH)
+            # TESTING ONLY - REMOVE LATER
             pts_dicts = [{"x":x,"y":y,"theta":theta}
                          for x,y,theta in self.tracked_points]
 

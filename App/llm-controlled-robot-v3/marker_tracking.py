@@ -37,7 +37,7 @@ def generate_marker_track(
     # --- 1) normalize home_pos ---
     if isinstance(home_pos, list):
         # e.g. [('Home',(x,y))]
-        _, coord = home_pos[0]
+        _, coord, corners = home_pos[0]
         hx, hy = coord
     else:
         hx, hy = home_pos

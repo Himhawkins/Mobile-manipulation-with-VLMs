@@ -1,6 +1,6 @@
 {
-    "warp_width": 800,
-    "warp_height": 800,
+    "warp_width": 1200,
+    "warp_height": 900,
     "marker_prompt": "Blue Circles",
-    "obstacles_prompt": "Black Rectangles"
+    "obstacles_prompt": "Obstacles Black Rectangles Solid"
 }

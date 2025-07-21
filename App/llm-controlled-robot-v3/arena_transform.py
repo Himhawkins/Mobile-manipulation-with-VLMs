@@ -270,61 +270,115 @@ def detect_and_list(
     detector = ObstacleDetector(api_key=api_key, prompt=prompt)
     return detector.detect_obstacles(image)
 
-def detect_and_read_alphabets(frame, api_key):
+# def detect_and_read_alphabets(frame, api_key):
+#     """
+#     Returns a list of (letter, centroid) for each detected letter.
+#     """
+#     prompt="Alphabets"
+#     detections = detect_and_list(frame, api_key, prompt)
+#     letter_info = []
+#     for det in detections:
+#         x, y, w, h = det["bbox"]
+#         cx, cy     = det["centroid"]
+
+#         # 2) crop the region (with a little padding)
+#         pad = 4
+#         x1 = max(0, x - pad)
+#         y1 = max(0, y - pad)
+#         x2 = min(frame.shape[1], x + w + pad)
+#         y2 = min(frame.shape[0], y + h + pad)
+#         crop = frame[y1:y2, x1:x2]
+
+#         # 3) convert to grayscale & threshold (helps OCR)
+#         gray = cv2.cvtColor(crop, cv2.COLOR_BGR2GRAY)
+#         _, thresh = cv2.threshold(gray, 0, 255,
+#                                   cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
+
+#         # 4) run Tesseract, restricting to single characters
+#         custom_config = r'-c tessedit_char_whitelist=ABCDEFGHIJKLMNOPQRSTUVWXYZ --psm 10'
+#         text = pytesseract.image_to_string(thresh,
+#                                            config=custom_config).strip()
+
+#         if text:
+#             # grab first char if it detected more than one
+#             letter = text[0].upper()
+#             letter_info.append((letter, (cx, cy)))
+#     return letter_info
+
+def detect_and_read_alphabets(frame, api_key) -> List[Tuple[str, Tuple[int,int], Tuple[int,int,int,int]]]:
     """
-    Returns a list of (letter, centroid) for each detected letter.
+    Returns a list of (letter, centroid, bbox) for each detected letter A–D,
+    using detect_and_list rather than Tesseract OCR.
+    Ensures each letter only appears once.
     """
-    prompt="Alphabets"
-    detections = detect_and_list(frame, api_key, prompt)
-    letter_info = []
-    for det in detections:
-        x, y, w, h = det["bbox"]
-        cx, cy     = det["centroid"]
+    letters = ["A", "B", "C", "D"]
+    letter_info: List[Tuple[str, Tuple[int,int], Tuple[int,int,int,int]]] = []
+    seen = set()
 
-        # 2) crop the region (with a little padding)
-        pad = 4
-        x1 = max(0, x - pad)
-        y1 = max(0, y - pad)
-        x2 = min(frame.shape[1], x + w + pad)
-        y2 = min(frame.shape[0], y + h + pad)
-        crop = frame[y1:y2, x1:x2]
+    for letter in letters:
+        dets = detect_and_list(frame, api_key, letter)
+        for det in dets:
+            if letter not in seen:
+                cx, cy = det["centroid"]
+                x, y, w, h = det["bbox"]
+                letter_info.append((letter, (int(cx), int(cy)), (int(x), int(y), int(w), int(h))))
+                seen.add(letter)
+                break
 
-        # 3) convert to grayscale & threshold (helps OCR)
-        gray = cv2.cvtColor(crop, cv2.COLOR_BGR2GRAY)
-        _, thresh = cv2.threshold(gray, 0, 255,
-                                  cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
-
-        # 4) run Tesseract, restricting to single characters
-        custom_config = r'-c tessedit_char_whitelist=ABCDEFGHIJKLMNOPQRSTUVWXYZ --psm 10'
-        text = pytesseract.image_to_string(thresh,
-                                           config=custom_config).strip()
-
-        if text:
-            # grab first char if it detected more than one
-            letter = text[0].upper()
-            letter_info.append((letter, (cx, cy)))
     return letter_info
+
 
 def detect_home(frame, api_key):
     """
     Returns a list of (letter, centroid) for each detected letter.
     """
-    prompt="Home Icon"
+    prompt="Blue Home Icon"
     detections = detect_and_list(frame, api_key, prompt)
     home = []
     for det in detections:
         cx, cy     = det["centroid"]
-        home.append(("Home", (cx, cy)))
+        x, y, w, h = det["bbox"]
+        home.append(("Home", (int(cx), int(cy)), (int(x), int(y), int(w), int(h))))
     return home
+
+def main():
+    # 1) Get API key
+    load_dotenv()
+    api_key = os.getenv("MOONDREAM_API_KEY")
+    if not api_key:
+        api_key = input("Enter your MoonDream API key: ").strip()
+
+    
+    # 2) Open camera #2
+    cam_idx = 2
+    cap = cv2.VideoCapture(cam_idx)
+    if not cap.isOpened():
+        print(f"Error: could not open camera index {cam_idx}")
+        return
+
+    # 3) Stream and process frames
+    ret, frame = cap.read()
+
+    # 4) Detect letters A–D
+    try:
+        letters = detect_home(frame, api_key)
+    except Exception as e:
+        print(f"Detection error: {e}")
+        letters = []
+
+    # 5) Overlay results
+    for letter, (x, y) in letters:
+        cv2.putText(frame, letter, (int(x), int(y)),
+                    cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+        cv2.circle(frame, (int(x), int(y)), 5, (0, 255, 0), -1)
+
+    # 6) Display
+    cv2.imshow(f"Overlay Feed (cam {cam_idx})", frame)
+
+    # 7) Cleanup
+    cap.release()
+    cv2.destroyAllWindows()
 
 
 if __name__ == "__main__":
-    load_dotenv()
-    api_key = os.getenv("MOONDREAM_API_KEY")
-
-    # detect obstacles on the original image
-    img = cv2.imread("arena_img_test3.png")
-    raw_letters = detect_home(img, api_key)
-    # e.g. [('A', (120,300)), ('Z',(450,200)), …]
-    alphabet_centroids = raw_letters
-    print("Detected letters:", alphabet_centroids)
+    main()
