@@ -1,0 +1,22 @@
+{
+    "generate_circle_pattern": {
+        "description": "Generate points for a circle of given radius and number of points.",
+        "inputs": [
+            {
+                "name": "radius",
+                "type": "float",
+                "description": "The radius of the circle."
+            },
+            {
+                "name": "num_points",
+                "type": "int",
+                "description": "The number of points to generate."
+            }
+        ],
+        "output": {
+            "type": "List[Tuple[float, float, float]]",
+            "description": "A list of points (x, y, heading)."
+        },
+        "usage": "points = generate_circle_pattern(radius=150.0, num_points=60)"
+    }
+}
