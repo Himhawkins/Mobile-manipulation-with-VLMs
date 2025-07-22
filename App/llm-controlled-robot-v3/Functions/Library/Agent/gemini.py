@@ -211,18 +211,23 @@ def call_gemini_agent(prompt, agent_name,model_ver='gemini-2.5-flash'):
         # return response , functions_list
 
         chat = model.start_chat()
+
+
+
         response = chat.send_message(full_prompt)
         
-        print("\n--- Gemini Response (Function Call) ---")
-        print(response)
-
+        
         # 6. Execute function calls if the model requests them
         function_results = execute_function_calls(response, functions_list)
 
-        # 7. Send results back to the model to get a final answer
+        # 7. Send results back to the model to get a final answer -- KEEP RUNNING UNTIL SATISFIED!
         if function_results:
-            print("\n--- Sending Function Results Back to Gemini ---")
-            response = chat.send_message(function_results)
+            while function_results:
+                print("\n--- Gemini Response (Function Call) ---")
+                print(response)
+                print("\n--- Sending Function Results Back to Gemini ---")
+                response = chat.send_message(function_results)
+                function_results = execute_function_calls(response, functions_list)
             print("\n--- Final Gemini Response ---")
             print(response.text)
         else:
