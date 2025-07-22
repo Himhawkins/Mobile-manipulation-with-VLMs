@@ -1,5 +1,14 @@
 
 import json
+from .load import load_agent_description,load_functions_description
+try:
+    import google.generativeai as genai
+    from google.generativeai.types import FunctionDeclaration, Tool
+except ImportError:
+    print("Please install google-generativeai: pip install google-generativeai")
+    genai = None
+    FunctionDeclaration = None
+    Tool = None
 
 def gemini_tool_list(function_details):
     """
@@ -60,3 +69,73 @@ def gemini_tool_list(function_details):
         gemini_tools.append(tool_declaration)
         
     return gemini_tools
+
+
+
+def call_gemini_agent(prompt, agent_name,model_ver='gemini-2.5-flash'):
+    """
+    Runs a full agent loop: load, format, and call Gemini with tools.
+
+    Args:
+        prompt (str): The user's prompt for the agent.
+        agent_name (str): The name of the agent to run.
+    """
+    if not all([genai, FunctionDeclaration, Tool]):
+        print("Google Generative AI library not installed. Cannot run agent.")
+        return
+
+    print(f"--- Running Agent: {agent_name} ---")
+    
+    # 1. Fetch agent details
+    background, functions_list = load_agent_description(agent_name)
+    if not (background or functions_list):
+        print(f"Failed to load agent '{agent_name}'. Aborting.")
+        return
+
+    # 2. Fetch function details
+    function_details = load_functions_description(functions_list)
+    if not function_details:
+        print("Could not load any function details. Aborting.")
+        return
+
+    # 3. Get Gemini tool list
+    gemini_tool_definitions = gemini_tool_list(function_details)
+    if not gemini_tool_definitions:
+        print("Could not create Gemini tool definitions. Aborting.")
+        return
+        
+    # 4. Create Gemini Tool objects
+    try:
+        function_declarations = [FunctionDeclaration(**tool) for tool in gemini_tool_definitions]
+        agent_tool = Tool(function_declarations=function_declarations)
+    except Exception as e:
+        print(f"Error creating Gemini Tool object: {e}")
+        return
+
+    # 5. Combine prompt, background, and function details
+    function_documentation = "\n".join(functions_list)
+    full_prompt = (
+        f"Agent Background: {background}\n\n"
+        f"Function Documentation:\n{function_documentation}\n\n"
+        f"User Request: {prompt}"
+    )
+    
+    print("\n--- Calling Gemini API ---")
+    try:
+        # Configure your API key (replace with your actual key or set as an env var)
+        # genai.configure(api_key="YOUR_API_KEY")
+
+        # Initialize the model, providing the tool definition
+        model = genai.GenerativeModel(
+            model_name=model_ver,
+            tools=[agent_tool]
+        )
+        
+        response = model.generate_content(full_prompt)
+        print("\n--- Gemini Response ---")
+        print(response)
+
+    except Exception as e:
+        print(f"\nAn error occurred during the Gemini API call: {e}")
+        print("Please ensure your API key is configured correctly.")
+
