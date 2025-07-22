@@ -1,5 +1,6 @@
 
 import json
+import importlib
 from .load import load_agent_description,load_functions_description
 try:
     import google.generativeai as genai
@@ -9,6 +10,79 @@ except ImportError:
     genai = None
     FunctionDeclaration = None
     Tool = None
+    Part=None
+
+
+def execute_function_calls(response, functions_list):
+    """
+    Parses a Gemini response, executes the requested function calls, and
+    returns the results as a list of dictionaries.
+
+    Args:
+        response: The GenerateContentResponse object from the Gemini API.
+        functions_list (list): The list of "Library: lib, Name: func" strings.
+
+    Returns:
+        list: A list of dicts, where each dict is a function_response
+              containing the result of a function call.
+    """
+    if not response.candidates[0].content.parts:
+        return None
+
+    # Create a mapping from function name to library for easy lookup
+    name_to_library = {}
+    for func_string in functions_list:
+        parts = func_string.split(', ')
+        library = parts[0].replace('Library: ', '').strip()
+        name = parts[1].replace('Name: ', '').strip()
+        name_to_library[name] = library
+
+    results = []
+    for part in response.candidates[0].content.parts:
+        if not part.function_call:
+            continue
+        
+        func_call = part.function_call
+        func_name = func_call.name
+        # Convert proto Map to a standard dict
+        func_args = dict(func_call.args)
+
+        print(f"Executing: {func_name}({func_args})")
+
+        try:
+            # Dynamically import the library and get the function
+            library_name = name_to_library.get(func_name)
+            if not library_name:
+                raise ImportError(f"No library found for function '{func_name}'")
+            
+            module_path = f"Functions.Library.{library_name}"
+            module = importlib.import_module(module_path)
+            function_to_call = getattr(module, func_name)
+
+            # Execute the function with its arguments
+            result = function_to_call(**func_args)
+
+            # Append the successful result for the next API call
+            results.append({
+                "function_response": {
+                    "name": func_name,
+                    "response": {"result": result}
+                }
+            })
+
+        except Exception as e:
+            print(f"Error executing function '{func_name}': {e}")
+            # Append an error message for the model
+            results.append({
+                "function_response": {
+                    "name": func_name,
+                    "response": {"error": str(e)}
+                }
+            })
+            
+    return results
+
+
 
 def gemini_tool_list(function_details):
     """
@@ -113,7 +187,7 @@ def call_gemini_agent(prompt, agent_name,model_ver='gemini-2.5-flash'):
         return
 
     # 5. Combine prompt, background, and function details
-    function_documentation = "\n".join(functions_list)
+    function_documentation = "\n".join(function_details)
     full_prompt = (
         f"Agent Background: {background}\n\n"
         f"Function Documentation:\n{function_documentation}\n\n"
@@ -131,11 +205,32 @@ def call_gemini_agent(prompt, agent_name,model_ver='gemini-2.5-flash'):
             tools=[agent_tool]
         )
         
-        response = model.generate_content(full_prompt)
-        print("\n--- Gemini Response ---")
+        # response = model.generate_content(full_prompt)
+        # print("\n--- Gemini Response ---")
+        # print(response)
+        # return response , functions_list
+
+        chat = model.start_chat()
+        response = chat.send_message(full_prompt)
+        
+        print("\n--- Gemini Response (Function Call) ---")
         print(response)
+
+        # 6. Execute function calls if the model requests them
+        function_results = execute_function_calls(response, functions_list)
+
+        # 7. Send results back to the model to get a final answer
+        if function_results:
+            print("\n--- Sending Function Results Back to Gemini ---")
+            response = chat.send_message(function_results)
+            print("\n--- Final Gemini Response ---")
+            print(response.text)
+        else:
+            print("\n--- Final Gemini Response (No Function Call) ---")
+            print(response.text)
 
     except Exception as e:
         print(f"\nAn error occurred during the Gemini API call: {e}")
         print("Please ensure your API key is configured correctly.")
+        return None ,functions_list
 
