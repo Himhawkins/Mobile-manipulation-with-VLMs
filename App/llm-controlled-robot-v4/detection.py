@@ -49,7 +49,8 @@ def detect_and_list(image, prompt):
     count = len(obstacles)
     return obstacles, count
 
-def detect_and_get_centroids(frame, prompt, save_path=None):
+def detect_and_get_centroids(img_path="Data/frame_img.png", prompt="Blue Cricles", save_path=None):
+    frame = cv2.imread(img_path)
     objects, _ = detect_and_list(frame, prompt)
     centroids = [o["centroid"] for o in objects]
     if save_path is not None:
@@ -58,7 +59,8 @@ def detect_and_get_centroids(frame, prompt, save_path=None):
                     f.write(f"{x},{y}\n")
     return centroids
 
-def detect_and_get_bbox(frame, prompt, save_path=None):
+def detect_and_get_bbox(img_path="Data/frame_img.png", prompt="Blue Cricles", save_path=None):
+    frame = cv2.imread(img_path)
     objects, _ = detect_and_list(frame, prompt)
     obstacles = [o["bbox"] for o in objects]
     if save_path is not None:
@@ -67,7 +69,8 @@ def detect_and_get_bbox(frame, prompt, save_path=None):
                     f.write(f"{x},{y},{w},{h}\n")
     return obstacles
 
-def detect_arena(frame, prompt, save_path=None):
+def detect_arena(img_path="Data/frame_img.png", prompt="Blue Cricles", save_path=None):
+    frame = cv2.imread(img_path)
     corners, count = detect_and_list(frame, prompt)
     centroids = [o["centroid"] for o in corners]
     if save_path is not None:
@@ -78,7 +81,8 @@ def detect_arena(frame, prompt, save_path=None):
         raise ValueError(f"Expected 4 markers, but found {len(corners)}")
     return centroids
 
-def detect_objects(frame, prompt_list, save_path=None):
+def detect_objects(img_path="Data/frame_img.png", prompt_list=["A","B","C"], save_path=None):
+    frame = cv2.imread(img_path)
     centroids = []
     for prompt in prompt_list:
         pts = detect_and_get_centroids(frame=frame, prompt=prompt)
@@ -109,13 +113,15 @@ def detect_robot_pose(frame, aruco_id, save_path=None):
             return (cx, cy, theta, pts)
     return None
 
-def main():
-    frame = cv2.imread("arena_img_test1.png")
-    # detect_and_get_centroids(frame=frame, prompt="Blue Circles", save_path="Data/arena_corners.txt")
-    # detect_and_get_bbox(frame=frame, prompt="Obstacles Black Rectangles", save_path="Data/obstacles.txt")
+def save_img_to_path(frame, save_path="Data/frame_img.png"):
+    cv2.imwrite(save_path, frame)
 
-    list = ["A", "B", "Home"]
-    detect_objects(frame=frame, prompt_list=list, save_path="Targets/targets.txt")
+def main():
+    IMG_PATH = "TestImages/img6.png"
+    frame = cv2.imread(IMG_PATH)
+    save_img_to_path(frame, save_path="Data/frame_img.png")
+    detect_arena(IMG_PATH, "Blue Circles", save_path="Data/arena_corners.txt")
+    detect_and_get_bbox(IMG_PATH, "Obstacles Black Rectangles", save_path="Data/obstacles.txt")
 
 if __name__ == "__main__":
     main()

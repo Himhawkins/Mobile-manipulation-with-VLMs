@@ -1,3 +1,7 @@
+import os
+import sys
+import numpy as np
+
 def read_data(data_folder="Data"):
     """
     Reads robotics-related data from text files within a specified folder.
@@ -72,3 +76,13 @@ def read_data(data_folder="Data"):
         return None
 
     return data
+
+if __name__ == "__main__":
+    data = read_data("Data")
+    if data is None:
+        sys.exit(1)
+
+    for key, arr in data.items():
+        print(f"{key}:")
+        print(arr)
+        print()
