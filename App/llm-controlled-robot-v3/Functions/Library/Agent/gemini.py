@@ -1,7 +1,7 @@
 
 import json
 import importlib
-from .load import load_agent_description,load_functions_description
+from .load_docs import load_agent_description,load_functions_description
 try:
     import google.generativeai as genai
     from google.generativeai.types import FunctionDeclaration, Tool
