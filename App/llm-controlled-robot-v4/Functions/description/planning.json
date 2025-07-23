@@ -1,0 +1,14 @@
+ {
+        "trace_targets": {
+            "description": "Plans a multi-segment path to trace a series of targets, avoiding obstacles. It reads environment data, loads targets, plans a path using A*, and saves the resulting path to a file.",
+            "inputs": [
+                {"name": "input_target_path", "type": "str", "description": "Path to the text file containing target coordinates.", "is_optional": 1},
+                {"name": "output_target_path", "type": "str", "description": "Path where the final planned path coordinates will be saved.", "is_optional": 1},
+                {"name": "start", "type": "Tuple[int, int]", "description": "Optional starting coordinates (x, y). If None, uses the robot's position from the data folder.", "is_optional": 1},
+                {"name": "data_folder", "type": "str", "description": "Folder containing environment data like arena corners, obstacles, and robot position.", "is_optional": 1},
+                {"name": "spacing", "type": "int", "description": "The spacing used to create a safety buffer around obstacles.", "is_optional": 1}
+            ],
+            "output": {"type": "str", "description": "A confirmation message indicating that the path has been planned and saved successfully."},
+            "usage": "planning.trace_targets(input_target_path='targets.txt', output_target_path='planned_path.txt', data_folder='env_data')"
+        }
+    }
