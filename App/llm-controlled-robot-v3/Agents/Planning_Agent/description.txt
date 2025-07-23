@@ -1,0 +1,1 @@
+This agent gives us the planned path for the robot, it takes the input, and creates a python logic using the set of functions avaialabe to it, that generate the desired path.
