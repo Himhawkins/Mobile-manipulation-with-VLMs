@@ -1,0 +1,13 @@
+{
+    "generate_ellipse_pattern": {
+        "description": "Generate points for an ellipse.",
+        "inputs": [
+            {"name": "major_axis", "type": "float", "description": "The length of the ellipse's major (longer) axis."},
+            {"name": "minor_axis", "type": "float", "description": "The length of the ellipse's minor (shorter) axis."},
+            {"name": "num_points", "type": "int", "description": "The number of points to generate along the ellipse's circumference."},
+            {"name": "grid_size", "type": "Tuple[int, int]", "description": "Optional (width, height) of the grid to center the pattern in."}
+        ],
+        "output": {"type": "List[Tuple[float, float, float]]", "description": "A list of points, where each point is a tuple of (x, y, heading)."},
+        "usage": "points = generate_ellipse_pattern(major_axis=200.0, minor_axis=100.0, num_points=70)"
+    }
+}

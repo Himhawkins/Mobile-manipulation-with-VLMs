@@ -1,0 +1,7 @@
+{
+    "aruco_id": "782",
+    "arena_width": "1200",
+    "arena_height": "900",
+    "corner_prompt": "Blue Circles",
+    "obstacle_prompt": "Obstacles Black Rectangles"
+}

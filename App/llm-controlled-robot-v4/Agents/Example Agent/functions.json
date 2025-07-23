@@ -1,0 +1,10 @@
+[
+    {
+        "library": "calculator",
+        "name": "add"
+    },
+    {
+        "library": "shapes",
+        "name": "generate_circle_pattern"
+    }
+]
