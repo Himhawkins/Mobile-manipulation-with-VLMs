@@ -8,12 +8,7 @@ from matplotlib.patches import Polygon, Rectangle
 from astar import PathPlanner
 from Functions.Library.Agent.load_data import read_data
 
-def load_targets(path="Targets/targets.txt"):
-    raw = np.loadtxt(path, delimiter=',')
-    pts = raw.reshape(-1, 2)
-    return [(int(x), int(y)) for x, y in pts]
-
-def trace_targets(input_target_path, output_target_path, start=None, data_folder="Data", spacing=20):
+def trace_targets(input_target_list, output_target_path, start=None, data_folder="Data", spacing=20):
     data = read_data(data_folder)
     if data is None:
         raise RuntimeError(f"Could not read data from '{data_folder}'")
@@ -37,7 +32,7 @@ def trace_targets(input_target_path, output_target_path, start=None, data_folder
     kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (k, k))
     planner.mask = cv2.dilate(planner.mask, kernel)
 
-    targets = load_targets(input_target_path)
+    targets = input_target_list
     paths = []
     current = start
 

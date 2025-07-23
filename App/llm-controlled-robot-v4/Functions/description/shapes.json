@@ -1,103 +1,130 @@
 {
-    "generate_circle_pattern": {
-        "description": "Generate points for a circle of given radius and number of points.",
-        "inputs": [
-            {"name": "radius", "type": "float", "description": "The radius of the circle."},
-            {"name": "num_points", "type": "int", "description": "The number of points to generate on the circle's circumference."},
-            {"name": "center", "type": "Tuple[float, float]", "description": "Optional (x, y) coordinates for the circle's center."},
-            {"name": "grid_size", "type": "Tuple[int, int]", "description": "Optional (width, height) of the grid; used if center is not provided."}
-        ],
-        "output": {"type": "List[Tuple[float, float, float]]", "description": "A list of points, where each point is a tuple of (x, y, heading)."},
-        "usage": "points = generate_circle_pattern(radius=150.0, num_points=60)"
+  "generate_circle_pattern": {
+    "description": "Generate points for a circle of given radius and number of points. If grid_size is not provided, uses read_grid_size().",
+    "inputs": [
+      { "name": "radius", "type": "float", "description": "Radius of the circle." },
+      { "name": "num_points", "type": "int", "description": "Number of points to generate." },
+      { "name": "center", "type": "Tuple[float, float]", "description": "Optional (x,y) center. Defaults to grid midpoint." },
+      { "name": "grid_size", "type": "Tuple[int, int]", "description": "Optional (width,height) for grid if center is None." }
+    ],
+    "output": {
+      "type": "List[Tuple[float, float]]",
+      "description": "List of (x, y) points on the circle."
     },
-    "generate_rectangle_pattern": {
-        "description": "Generate points along the perimeter of a rectangle.",
-        "inputs": [
-            {"name": "width_rect", "type": "float", "description": "The total width of the rectangle."},
-            {"name": "height_rect", "type": "float", "description": "The total height of the rectangle."},
-            {"name": "num_points_per_side", "type": "int", "description": "The number of points to generate on each side of the rectangle."},
-            {"name": "grid_size", "type": "Tuple[int, int]", "description": "Optional (width, height) of the grid to center the pattern in."}
-        ],
-        "output": {"type": "List[Tuple[float, float, float]]", "description": "A list of points, where each point is a tuple of (x, y, heading)."},
-        "usage": "points = generate_rectangle_pattern(width_rect=200.0, height_rect=100.0, num_points_per_side=15)"
+    "usage": "generate_circle_pattern(radius=100.0, num_points=60)"
+  },
+  "generate_rectangle_pattern": {
+    "description": "Generate points along the perimeter of a rectangle. If grid_size is not provided, uses read_grid_size().",
+    "inputs": [
+      { "name": "width_rect", "type": "float", "description": "Total rectangle width." },
+      { "name": "height_rect", "type": "float", "description": "Total rectangle height." },
+      { "name": "num_points_per_side", "type": "int", "description": "Points per side." },
+      { "name": "grid_size", "type": "Tuple[int, int]", "description": "Optional grid size." }
+    ],
+    "output": {
+      "type": "List[Tuple[float, float]]",
+      "description": "List of (x, y) points along rectangle edges."
     },
-    "generate_trapezium_pattern": {
-        "description": "Generate points around a symmetric trapezium.",
-        "inputs": [
-            {"name": "top_width", "type": "float", "description": "The width of the top base of the trapezium."},
-            {"name": "bottom_width", "type": "float", "description": "The width of the bottom base of the trapezium."},
-            {"name": "height", "type": "float", "description": "The height of the trapezium."},
-            {"name": "num_points_per_side", "type": "int", "description": "The number of points to generate on each side."},
-            {"name": "grid_size", "type": "Tuple[int, int]", "description": "Optional (width, height) of the grid to center the pattern in."}
-        ],
-        "output": {"type": "List[Tuple[float, float, float]]", "description": "A list of points, where each point is a tuple of (x, y, heading)."},
-        "usage": "points = generate_trapezium_pattern(top_width=100.0, bottom_width=200.0, height=80.0)"
+    "usage": "generate_rectangle_pattern(width_rect=200.0, height_rect=100.0, num_points_per_side=12)"
+  },
+  "generate_trapezium_pattern": {
+    "description": "Generate points around a symmetric trapezium. If grid_size is not provided, uses read_grid_size().",
+    "inputs": [
+      { "name": "top_width", "type": "float", "description": "Top base width." },
+      { "name": "bottom_width", "type": "float", "description": "Bottom base width." },
+      { "name": "height", "type": "float", "description": "Trapezium height." },
+      { "name": "num_points_per_side", "type": "int", "description": "Points per side." },
+      { "name": "grid_size", "type": "Tuple[int, int]", "description": "Optional grid size." }
+    ],
+    "output": {
+      "type": "List[Tuple[float, float]]",
+      "description": "List of (x, y) points around trapezium edges."
     },
-    "generate_parallelogram_pattern": {
-        "description": "Generate points around a parallelogram.",
-        "inputs": [
-            {"name": "width_para", "type": "float", "description": "The width of the parallelogram's base."},
-            {"name": "height_para", "type": "float", "description": "The height of the parallelogram."},
-            {"name": "angle", "type": "float", "description": "The shear angle in radians (e.g., math.pi / 6 for 30 degrees)."},
-            {"name": "num_points_per_side", "type": "int", "description": "The number of points to generate on each side."},
-            {"name": "grid_size", "type": "Tuple[int, int]", "description": "Optional (width, height) of the grid to center the pattern in."}
-        ],
-        "output": {"type": "List[Tuple[float, float, float]]", "description": "A list of points, where each point is a tuple of (x, y, heading)."},
-        "usage": "points = generate_parallelogram_pattern(width_para=150.0, height_para=75.0, angle=0.52)"
+    "usage": "generate_trapezium_pattern(top_width=80.0, bottom_width=120.0, height=50.0)"
+  },
+  "generate_parallelogram_pattern": {
+    "description": "Generate points around a parallelogram. If grid_size is not provided, uses read_grid_size().",
+    "inputs": [
+      { "name": "width_para", "type": "float", "description": "Base width." },
+      { "name": "height_para", "type": "float", "description": "Height of parallelogram." },
+      { "name": "angle", "type": "float", "description": "Shear angle in radians." },
+      { "name": "num_points_per_side", "type": "int", "description": "Points per side." },
+      { "name": "grid_size", "type": "Tuple[int, int]", "description": "Optional grid size." }
+    ],
+    "output": {
+      "type": "List[Tuple[float, float]]",
+      "description": "List of (x, y) points around parallelogram edges."
     },
-    "generate_diamond_pattern": {
-        "description": "Generate points around a diamond (a rhombus centered on the origin).",
-        "inputs": [
-            {"name": "width", "type": "float", "description": "The total width of the diamond."},
-            {"name": "height", "type": "float", "description": "The total height of the diamond."},
-            {"name": "num_points_per_side", "type": "int", "description": "The number of points to generate on each side."},
-            {"name": "grid_size", "type": "Tuple[int, int]", "description": "Optional (width, height) of the grid to center the pattern in."}
-        ],
-        "output": {"type": "List[Tuple[float, float, float]]", "description": "A list of points, where each point is a tuple of (x, y, heading)."},
-        "usage": "points = generate_diamond_pattern(width=150.0, height=150.0)"
+    "usage": "generate_parallelogram_pattern(width_para=150.0, height_para=75.0, angle=0.52)"
+  },
+  "generate_diamond_pattern": {
+    "description": "Generate points around a diamond (rhombus). If grid_size is not provided, uses read_grid_size().",
+    "inputs": [
+      { "name": "width", "type": "float", "description": "Total diamond width." },
+      { "name": "height", "type": "float", "description": "Total diamond height." },
+      { "name": "num_points_per_side", "type": "int", "description": "Points per side." },
+      { "name": "grid_size", "type": "Tuple[int, int]", "description": "Optional grid size." }
+    ],
+    "output": {
+      "type": "List[Tuple[float, float]]",
+      "description": "List of (x, y) points around diamond edges."
     },
-    "generate_lawnmower_pattern": {
-        "description": "Generate a back-and-forth lawnmower coverage pattern.",
-        "inputs": [
-            {"name": "width_area", "type": "float", "description": "The width of the area to cover."},
-            {"name": "height_area", "type": "float", "description": "The height of the area to cover."},
-            {"name": "spacing", "type": "float", "description": "The spacing between each horizontal pass."},
-            {"name": "grid_size", "type": "Tuple[int, int]", "description": "Optional (width, height) of the grid to center the pattern in."}
-        ],
-        "output": {"type": "List[Tuple[float, float, float]]", "description": "A list of points, where each point is a tuple of (x, y, heading)."},
-        "usage": "points = generate_lawnmower_pattern(width_area=300.0, height_area=200.0, spacing=20.0)"
+    "usage": "generate_diamond_pattern(width=100.0, height=100.0)"
+  },
+  "generate_lawnmower_pattern": {
+    "description": "Generate a back-and-forth lawnmower coverage pattern. If grid_size is not provided, uses read_grid_size().",
+    "inputs": [
+      { "name": "width_area", "type": "float", "description": "Area width." },
+      { "name": "height_area", "type": "float", "description": "Area height." },
+      { "name": "spacing", "type": "float", "description": "Spacing between passes." },
+      { "name": "grid_size", "type": "Tuple[int, int]", "description": "Optional grid size." }
+    ],
+    "output": {
+      "type": "List[Tuple[float, float, float]]",
+      "description": "List of (x, y, heading) tuples for each pass."
     },
-    "generate_zigzag_pattern": {
-        "description": "Generate a zigzag line across a bounding box.",
-        "inputs": [
-            {"name": "width_area", "type": "float", "description": "The width of the bounding box for the zigzag."},
-            {"name": "height_area", "type": "float", "description": "The height of the bounding box for the zigzag."},
-            {"name": "num_zigs", "type": "int", "description": "The number of 'zigs' (turns) in the pattern."},
-            {"name": "grid_size", "type": "Tuple[int, int]", "description": "Optional (width, height) of the grid to center the pattern in."}
-        ],
-        "output": {"type": "List[Tuple[float, float, float]]", "description": "A list of points, where each point is a tuple of (x, y, heading)."},
-        "usage": "points = generate_zigzag_pattern(width_area=250.0, height_area=150.0, num_zigs=8)"
+    "usage": "generate_lawnmower_pattern(width_area=300.0, height_area=200.0, spacing=20.0)"
+  },
+  "generate_zigzag_pattern": {
+    "description": "Generate a zigzag line across a bounding box. If grid_size is not provided, uses read_grid_size().",
+    "inputs": [
+      { "name": "width_area", "type": "float", "description": "Box width." },
+      { "name": "height_area", "type": "float", "description": "Box height." },
+      { "name": "num_zigs", "type": "int", "description": "Number of zig segments." },
+      { "name": "grid_size", "type": "Tuple[int, int]", "description": "Optional grid size." }
+    ],
+    "output": {
+      "type": "List[Tuple[float, float]]",
+      "description": "List of (x, y) points in zigzag order."
     },
-    "generate_spiral_pattern": {
-        "description": "Generate an Archimedean spiral.",
-        "inputs": [
-            {"name": "turns", "type": "float", "description": "The total number of full rotations in the spiral."},
-            {"name": "max_radius", "type": "float", "description": "The final radius of the spiral at its outermost point."},
-            {"name": "num_points", "type": "int", "description": "The total number of points to generate along the spiral."},
-            {"name": "grid_size", "type": "Tuple[int, int]", "description": "Optional (width, height) of the grid to center the pattern in."}
-        ],
-        "output": {"type": "List[Tuple[float, float, float]]", "description": "A list of points, where each point is a tuple of (x, y, heading)."},
-        "usage": "points = generate_spiral_pattern(turns=4.0, max_radius=120.0, num_points=300)"
+    "usage": "generate_zigzag_pattern(width_area=250.0, height_area=150.0, num_zigs=8)"
+  },
+  "generate_spiral_pattern": {
+    "description": "Generate an Archimedean spiral. If grid_size is not provided, uses read_grid_size().",
+    "inputs": [
+      { "name": "turns", "type": "float", "description": "Number of full rotations." },
+      { "name": "max_radius", "type": "float", "description": "Maximum spiral radius." },
+      { "name": "num_points", "type": "int", "description": "Total points along spiral." },
+      { "name": "grid_size", "type": "Tuple[int, int]", "description": "Optional grid size." }
+    ],
+    "output": {
+      "type": "List[Tuple[float, float]]",
+      "description": "List of (x, y) points along spiral."
     },
-    "generate_ellipse_pattern": {
-        "description": "Generate points for an ellipse.",
-        "inputs": [
-            {"name": "major_axis", "type": "float", "description": "The length of the ellipse's major (longer) axis."},
-            {"name": "minor_axis", "type": "float", "description": "The length of the ellipse's minor (shorter) axis."},
-            {"name": "num_points", "type": "int", "description": "The number of points to generate along the ellipse's circumference."},
-            {"name": "grid_size", "type": "Tuple[int, int]", "description": "Optional (width, height) of the grid to center the pattern in."}
-        ],
-        "output": {"type": "List[Tuple[float, float, float]]", "description": "A list of points, where each point is a tuple of (x, y, heading)."},
-        "usage": "points = generate_ellipse_pattern(major_axis=200.0, minor_axis=100.0, num_points=70)"
-    }
+    "usage": "generate_spiral_pattern(turns=4.0, max_radius=120.0, num_points=300)"
+  },
+  "generate_ellipse_pattern": {
+    "description": "Generate points for an ellipse. If grid_size is not provided, uses read_grid_size().",
+    "inputs": [
+      { "name": "major_axis", "type": "float", "description": "Ellipse major axis length." },
+      { "name": "minor_axis", "type": "float", "description": "Ellipse minor axis length." },
+      { "name": "num_points", "type": "int", "description": "Points around ellipse." },
+      { "name": "grid_size", "type": "Tuple[int, int]", "description": "Optional grid size." }
+    ],
+    "output": {
+      "type": "List[Tuple[float, float]]",
+      "description": "List of (x, y) points around ellipse."
+    },
+    "usage": "generate_ellipse_pattern(major_axis=200.0, minor_axis=100.0, num_points=70)"
+  }
 }

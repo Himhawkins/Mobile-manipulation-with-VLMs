@@ -26,8 +26,7 @@ def generate_circle_pattern(
         theta = 2 * math.pi * i / num_points
         x = cx + radius * math.cos(theta)
         y = cy + radius * math.sin(theta)
-        heading = theta + math.pi / 2
-        points.append((x, y, heading))
+        points.append((x, y))
     return points
 
 
@@ -58,8 +57,7 @@ def generate_rectangle_pattern(
             y_rel = y0 + (y1 - y0) * t
             x = cx + x_rel
             y = cy + y_rel
-            heading = math.atan2(y1 - y0, x1 - x0)
-            points.append((x, y, heading))
+            points.append((x, y))
     return points
 
 
@@ -91,7 +89,7 @@ def generate_trapezium_pattern(
             t = j / num_points_per_side
             x_rel = x0 + (x1 - x0) * t
             y_rel = y0 + (y1 - y0) * t
-            points.append((cx + x_rel, cy + y_rel, math.atan2(y1 - y0, x1 - x0)))
+            points.append((cx + x_rel, cy + y_rel))
     return points
 
 
@@ -122,7 +120,7 @@ def generate_parallelogram_pattern(
             t = j / num_points_per_side
             x_rel = x0 + (x1 - x0) * t
             y_rel = y0 + (y1 - y0) * t
-            points.append((cx + x_rel, cy + y_rel, math.atan2(y1 - y0, x1 - x0)))
+            points.append((cx + x_rel, cy + y_rel))
     return points
 
 
@@ -151,7 +149,7 @@ def generate_diamond_pattern(
             t = j / num_points_per_side
             x_rel = x0 + (x1 - x0) * t
             y_rel = y0 + (y1 - y0) * t
-            points.append((cx + x_rel, cy + y_rel, math.atan2(y1 - y0, x1 - x0)))
+            points.append((cx + x_rel, cy + y_rel))
     return points
 
 
@@ -207,14 +205,7 @@ def generate_zigzag_pattern(
         t = i / num_zigs
         x = -w2 + 2 * w2 * t
         y = h2 if i % 2 == 0 else -h2
-        if i < num_zigs:
-            t2 = (i + 1) / num_zigs
-            x2 = -w2 + 2 * w2 * t2
-            y2 = h2 if (i + 1) % 2 == 0 else -h2
-            heading = math.atan2(y2 - y, x2 - x)
-        else:
-            heading = 0
-        points.append((cx + x, cy + y, heading))
+        points.append((cx + x, cy + y))
     return points
 
 
@@ -240,8 +231,7 @@ def generate_spiral_pattern(
         radius = max_radius * t
         x = cx + radius * math.cos(angle)
         y = cy + radius * math.sin(angle)
-        heading = angle + math.pi / 2
-        points.append((x, y, heading))
+        points.append((x, y))
     return points
 
 
@@ -267,6 +257,5 @@ def generate_ellipse_pattern(
         y = cy + minor_axis * math.sin(theta)
         dx = -major_axis * math.sin(theta)
         dy = minor_axis * math.cos(theta)
-        heading = math.atan2(dy, dx)
-        points.append((x, y, heading))
+        points.append((x, y))
     return points
