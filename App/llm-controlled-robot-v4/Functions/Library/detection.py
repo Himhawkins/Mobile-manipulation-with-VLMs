@@ -49,8 +49,8 @@ def detect_and_list(image, prompt):
     count = len(obstacles)
     return obstacles, count
 
-def detect_and_get_centroids(img_path="Data/frame_img.png", prompt="Blue Cricles", save_path=None):
-    frame = cv2.imread(img_path)
+def detect_and_get_centroids(frame, prompt="Blue Cricles", save_path=None):
+    #frame = cv2.imread(img_path)
     objects, _ = detect_and_list(frame, prompt)
     centroids = [o["centroid"] for o in objects]
     if save_path is not None:
@@ -117,11 +117,11 @@ def save_img_to_path(frame, save_path="Data/frame_img.png"):
     cv2.imwrite(save_path, frame)
 
 def main():
-    IMG_PATH = "../../Data/live.jpg"
-    frame = cv2.imread(IMG_PATH)
+    IMG_PATH = "Data/live.jpg"
+    #frame = cv2.imread(IMG_PATH)
     #save_img_to_path(frame, save_path="Data/frame_img.png")
-    detect_arena(IMG_PATH, "Blue Circles", save_path="../../Data/arena_corners.txt")
+    g=detect_objects(IMG_PATH, "Blue Circles", save_path="Data/arena_corners.txt")
     #detect_and_get_bbox(IMG_PATH, "Obstacles Black Rectangles", save_path="Data/obstacles.txt")
-
+    print("lol", g)
 if __name__ == "__main__":
     main()

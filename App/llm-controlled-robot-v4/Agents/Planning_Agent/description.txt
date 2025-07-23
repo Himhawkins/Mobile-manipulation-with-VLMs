@@ -1,3 +1,9 @@
 This agent gives us the planned path for the robot, it takes the input, and creates a python logic using the set of functions avaialabe to it, that generate the desired path.
 
-GLOBAL VARIABLES: frame: the camera frame is saved in the frame_img.png file.
+keypoints are to be saved in Targets/target.txt
+path points are to be saved in Targets/path.txt
+
+GLOBAL VARIABLES: frame: the camera frame is saved in the Data/frame_img.png file.
+
+
+if you dont have sufficient data required by a function dont run it. Wait for the relevant data to come.

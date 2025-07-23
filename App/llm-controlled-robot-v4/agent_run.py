@@ -14,13 +14,16 @@ if __name__ == "__main__":
 
     agent_name = "Planning_Agent"#"Planning_Agent"
     
-    user_prompt = "Display my camera image!"#" generate a circle of radius 40 and 60 points and then circle of raduis 40 and 20 points"
+    user_prompt = "Create a path for the robot to got to A then B . You need to detect A and B they are markers."#" generate a circle of radius 40 and 60 points and then circle of raduis 40 and 20 points"
     
-    cap = cv2.VideoCapture(0)
+    cap = cv2.VideoCapture(2)
 
     ret, frame = cap.read()
-    cv2.imwrite("Data/live.jpg", frame)
+    cv2.imwrite("Data/frame_img.png", frame)
     response=call_gemini_agent(user_prompt, agent_name) # frame optional
+
+    
+
 
 
 

@@ -1,5 +1,13 @@
 [
     {
+        "library": "detection",
+        "name": "detect_objects"
+    },
+    {
+        "library": "planning",
+        "name": "trace_targets"
+    },
+    {
         "library": "shapes",
         "name": "generate_circle_pattern"
     },

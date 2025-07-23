@@ -2,11 +2,11 @@
   "trace_targets": {
     "description": "Traces A* paths between a list of target coordinates, avoiding obstacles and saving all reachable points to a file.",
     "inputs": [
-      { "name": "input_target_list", "type": "List[Tuple[int, int]]", "description": "List of (x,y) target coordinates." },
-      { "name": "output_target_path", "type": "str", "description": "File path to write improved point list (CSV)." },
+      { "name": "input_target_list", "type": "List[Tuple[int, int]]", "description": " Required. List of (x,y) tuple target coordinates. can be multiple coordinates NOT FILE" },
+      { "name": "output_target_path", "type": "str", "description": "Optional File path to write improved point list (CSV)." },
       { "name": "start", "type": "Tuple[int, int] or None", "description": "Optional start (x,y); defaults to robot_pos in data." },
-      { "name": "data_folder", "type": "str", "description": "Folder containing arena and obstacle data." },
-      { "name": "spacing", "type": "int", "description": "Dilation padding for obstacle mask." }
+      { "name": "data_folder", "type": "str", "description": " Optional Folder containing arena and obstacle data." },
+      { "name": "spacing", "type": "int", "description": "Optional Dilation padding for obstacle mask." }
     ],
     "output": {
       "type": "Tuple[np.ndarray, List[Tuple[int, int]], List[Tuple[int, int, int, int]], Tuple[int, int], List[Tuple[int, int]], List[List[Tuple[int, int]]]]",
