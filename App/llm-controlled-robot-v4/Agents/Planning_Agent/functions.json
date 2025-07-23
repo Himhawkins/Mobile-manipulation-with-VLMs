@@ -2,6 +2,9 @@
     {
         "library": "shapes",
         "name": "generate_circle_pattern"
+    },
+    {
+        "library": "display",
+        "name": "display_frame"
     }
-
 ]

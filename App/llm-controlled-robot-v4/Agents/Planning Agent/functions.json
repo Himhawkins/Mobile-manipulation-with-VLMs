@@ -34,5 +34,9 @@
     {
         "library": "shapes",
         "name": "generate_ellipse_pattern"
+    },
+    {
+        "library": "display",
+        "name": "display_frame"
     }
 ]

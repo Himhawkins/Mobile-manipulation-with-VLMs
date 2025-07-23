@@ -13,7 +13,7 @@ except ImportError:
     Part=None
 
 
-def execute_function_calls(response, functions_list):
+def execute_function_calls(response, functions_list,frame=None):
     """
     Parses a Gemini response, executes the requested function calls, and
     returns the results as a list of dictionaries.
@@ -146,7 +146,7 @@ def gemini_tool_list(function_details):
 
 
 
-def call_gemini_agent(prompt, agent_name,model_ver='gemini-2.5-flash'):
+def call_gemini_agent(prompt, agent_name,model_ver='gemini-2.5-flash',frame=None):
     """
     Runs a full agent loop: load, format, and call Gemini with tools.
 
@@ -177,7 +177,7 @@ def call_gemini_agent(prompt, agent_name,model_ver='gemini-2.5-flash'):
     if not gemini_tool_definitions:
         print("Could not create Gemini tool definitions. Aborting.")
         return
-        
+    print(gemini_tool_definitions)   
     # 4. Create Gemini Tool objects
     try:
         function_declarations = [FunctionDeclaration(**tool) for tool in gemini_tool_definitions]
@@ -212,10 +212,11 @@ def call_gemini_agent(prompt, agent_name,model_ver='gemini-2.5-flash'):
 
         chat = model.start_chat()
 
-
-
-        response = chat.send_message(full_prompt)
         
+         
+        response = chat.send_message(full_prompt)
+        print('first response:')
+        print(response)
         
         # 6. Execute function calls if the model requests them
         function_results = execute_function_calls(response, functions_list)
