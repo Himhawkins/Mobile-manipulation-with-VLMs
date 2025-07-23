@@ -1,33 +1,14 @@
-{
-  "trace_targets": {
-    "description": "Traces A* paths between a list of target coordinates, avoiding obstacles and saving all reachable points to a file.",
-    "inputs": [
-      { "name": "input_target_list", "type": "List[Tuple[int, int]]", "description": "List of (x,y) target coordinates." },
-      { "name": "output_target_path", "type": "str", "description": "File path to write improved point list (CSV)." },
-      { "name": "start", "type": "Tuple[int, int] or None", "description": "Optional start (x,y); defaults to robot_pos in data." },
-      { "name": "data_folder", "type": "str", "description": "Folder containing arena and obstacle data." },
-      { "name": "spacing", "type": "int", "description": "Dilation padding for obstacle mask." }
-    ],
-    "output": {
-      "type": "Tuple[np.ndarray, List[Tuple[int, int]], List[Tuple[int, int, int, int]], Tuple[int, int], List[Tuple[int, int]], List[List[Tuple[int, int]]]]",
-      "description": "Returns (frame image, arena corners, obstacles list, start position, target list, paths list)."
-    },
-    "usage": "trace_targets([(50,50), (150,150)], 'Targets/improved.txt', start=(10,10), data_folder='Data', spacing=5)"
-  },
-  "plot_trace": {
-    "description": "Plots the arena image with boundary, obstacles, start, targets, and A* path traces.",
-    "inputs": [
-      { "name": "frame", "type": "np.ndarray", "description": "BGR image loaded by OpenCV." },
-      { "name": "arena", "type": "List[Tuple[int, int]]", "description": "Polygon vertices of arena boundary." },
-      { "name": "obstacles", "type": "List[Tuple[int, int, int, int]]", "description": "List of (x,y,w,h) obstacle boxes." },
-      { "name": "start", "type": "Tuple[int, int]", "description": "Robot start coordinate." },
-      { "name": "targets", "type": "List[Tuple[int, int]]", "description": "Original target points." },
-      { "name": "paths", "type": "List[List[Tuple[int, int]]]", "description": "A* paths between points." }
-    ],
-    "output": {
-      "type": "None",
-      "description": "Displays a Matplotlib plot; no return value."
-    },
-    "usage": "plot_trace(frame, arena, obstacles, start, targets, paths)"
-  }
-}
+ {
+        "trace_targets": {
+            "description": "Plans a multi-segment path to trace a series of targets, avoiding obstacles. It reads environment data, loads targets, plans a path using A*, and saves the resulting path to a file.",
+            "inputs": [
+                {"name": "input_target_path", "type": "str", "description": "Path to the text file containing target coordinates. default Targets/targets.txt", "is_optional": 1},
+                {"name": "output_target_path", "type": "str", "description": "Path where the final planned path coordinates will be saved. default Targets/path.txt", "is_optional": 1},
+                {"name": "start", "type": "Tuple[int, int]", "description": "Optional starting coordinates (x, y). If None, uses the robot's position from the data folder.", "is_optional": 1},
+                {"name": "data_folder", "type": "str", "description": "Folder containing environment data like arena corners, obstacles, and robot position.", "is_optional": 1},
+                {"name": "spacing", "type": "int", "description": "The spacing used to create a safety buffer around obstacles.", "is_optional": 1}
+            ],
+            "output": {"type": "str", "description": "A confirmation message indicating that the path has been planned and saved successfully."},
+            "usage": "planning.trace_targets(input_target_path='targets.txt', output_target_path='planned_path.txt', data_folder='env_data')"
+        }
+    }

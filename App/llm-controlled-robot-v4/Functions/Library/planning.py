@@ -54,7 +54,7 @@ def trace_targets(input_target_list, output_target_path, start=None, data_folder
         for x, y in improved_points:
             f.write(f"{x},{y}\n")
 
-    return frame, arena, [r["bbox"] for r in obs], start, targets, paths
+    return "PAth Planned! and saved to {output_target_path}"#frame, arena, [r["bbox"] for r in obs], start, targets, paths
 
 def plot_trace(frame, arena, obstacles, start, targets, paths):
     img = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
