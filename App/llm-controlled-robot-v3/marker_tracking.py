@@ -100,7 +100,7 @@ def generate_marker_track(
     return routed_with_theta
 
 def pathPlanning(list_of_points, arena_corners, obstacles, camera_size, out_dir="targets/output"):
-    planner = PathPlanner(
+      planner = PathPlanner(
         obstacles,
         camera_size,
         arena_corners=arena_corners
