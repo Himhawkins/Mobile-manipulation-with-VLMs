@@ -6,7 +6,7 @@
                 {"name": "img_path", "type": "str", "description": "Path to the input image file.", "is_optional": 1},
                 {"name": "save_path", "type": "str", "description": "Optional file path to save the detected centroid coordinates.", "is_optional": 1}
             ],
-            "output": {"type": "None", "description": "This function does not return a value. It saves the results to a file if 'save_path' is provided."},
+            "output": {"type": "List[Tuple[int, int]]", "description": "A list of (x, y) coordinates for the centroids of all detected objects."},
             "usage": "detection.detect_objects(img_path='my_image.png', prompt_list=['robot', 'obstacle'], save_path='centroids.txt')"
         }
     }

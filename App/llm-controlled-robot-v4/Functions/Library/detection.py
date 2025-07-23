@@ -117,11 +117,11 @@ def save_img_to_path(frame, save_path="Data/frame_img.png"):
     cv2.imwrite(save_path, frame)
 
 def main():
-    IMG_PATH = "TestImages/img6.png"
+    IMG_PATH = "../../Data/live.jpg"
     frame = cv2.imread(IMG_PATH)
-    save_img_to_path(frame, save_path="Data/frame_img.png")
-    detect_arena(IMG_PATH, "Blue Circles", save_path="Data/arena_corners.txt")
-    detect_and_get_bbox(IMG_PATH, "Obstacles Black Rectangles", save_path="Data/obstacles.txt")
+    #save_img_to_path(frame, save_path="Data/frame_img.png")
+    detect_arena(IMG_PATH, "Blue Circles", save_path="../../Data/arena_corners.txt")
+    #detect_and_get_bbox(IMG_PATH, "Obstacles Black Rectangles", save_path="Data/obstacles.txt")
 
 if __name__ == "__main__":
     main()
