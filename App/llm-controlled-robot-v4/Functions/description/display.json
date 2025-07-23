@@ -1,22 +1,23 @@
 {
 "display_frame": {
-            "description": "Displays an OpenCV frame in a window. This function will show the provided frame and wait for a keypress. Press any key to close the window.",
+            "description": "Displays an OpenCV image in a window. This function will load and show the provided image and wait for a keypress. Press any key to close the window.",
             "inputs": [
-                {
-                    "name": "frame",
-                    "type": "np.ndarray",
-                    "description": "The image or frame (as a NumPy array) to be displayed."
-                },
                 {
                     "name": "window_name",
                     "type": "str",
                     "description": "The name of the window in which the frame will be shown."
+                },
+                 {
+                    "name": "image_name",
+                    "type": "str",
+                    "description": "The name of the image file to open and display. default name is live.jpg"
                 }
             ],
             "output": {
                 "type": "None",
                 "description": "This function does not return a value; it displays a window on the screen."
             },
-            "usage": "display.display_frame(frame, window_name='My Image')"
-        }
+            "usage": "display.display_frame(window_name='My Image', image_name='live.jpg')"
+            
+        } 
 }

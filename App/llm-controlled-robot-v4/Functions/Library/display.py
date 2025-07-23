@@ -1,6 +1,6 @@
 import cv2
 
-def display_frame(frame, window_name="OpenCV Frame"):
+def display_frame(window_name='OpenCV Frame',image_name='live.jpg',folder='Data'):
     """
     Displays an OpenCV frame in a window.
 
@@ -11,6 +11,7 @@ def display_frame(frame, window_name="OpenCV Frame"):
         frame (np.ndarray): The image or frame (as a NumPy array) to be displayed.
         window_name (str): The name of the window in which the frame will be shown.
     """
+    frame = cv2.imread(folder+'/'+image_name)
     try:
         # Check if the frame is valid
         if frame is None or frame.size == 0:
@@ -31,3 +32,6 @@ def display_frame(frame, window_name="OpenCV Frame"):
         # Clean up and close all OpenCV windows
         cv2.destroyAllWindows()
         print("Window closed.")
+
+# params = {'window_name': "Camera Feed", 'image_name': "live.jpg"}
+# display_frame(**params)

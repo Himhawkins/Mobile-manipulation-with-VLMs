@@ -17,9 +17,10 @@ if __name__ == "__main__":
     user_prompt = "Display my camera image!"#" generate a circle of radius 40 and 60 points and then circle of raduis 40 and 20 points"
     
     cap = cv2.VideoCapture(0)
+
     ret, frame = cap.read()
-    
-    response=call_gemini_agent(user_prompt, agent_name,frame=frame) # frame optional
+    cv2.imwrite("Data/live.jpg", frame)
+    response=call_gemini_agent(user_prompt, agent_name) # frame optional
 
 
 

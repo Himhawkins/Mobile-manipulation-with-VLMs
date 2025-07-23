@@ -13,7 +13,7 @@ except ImportError:
     Part=None
 
 
-def execute_function_calls(response, functions_list,frame=None):
+def execute_function_calls(response, functions_list):
     """
     Parses a Gemini response, executes the requested function calls, and
     returns the results as a list of dictionaries.
@@ -146,7 +146,7 @@ def gemini_tool_list(function_details):
 
 
 
-def call_gemini_agent(prompt, agent_name,model_ver='gemini-2.5-flash',frame=None):
+def call_gemini_agent(prompt, agent_name,model_ver='gemini-2.5-flash'):
     """
     Runs a full agent loop: load, format, and call Gemini with tools.
 
