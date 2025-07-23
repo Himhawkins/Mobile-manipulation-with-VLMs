@@ -4,3 +4,6 @@ def create_code(code, output_file):
     print("code you gave: ")
     print(code)
     return 'success!'
+
+
+def exec_code

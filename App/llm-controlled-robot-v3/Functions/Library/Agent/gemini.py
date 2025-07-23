@@ -219,7 +219,7 @@ def call_gemini_agent(prompt, agent_name,model_ver='gemini-2.5-flash'):
         
         # 6. Execute function calls if the model requests them
         function_results = execute_function_calls(response, functions_list)
-
+        
         # 7. Send results back to the model to get a final answer -- KEEP RUNNING UNTIL SATISFIED!
         if function_results:
             while function_results:
