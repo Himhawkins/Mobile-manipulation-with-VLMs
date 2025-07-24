@@ -13,7 +13,8 @@ def trace_targets(
     output_target_path,
     start=None,
     data_folder="Data",
-    spacing=20
+    spacing=20,
+    out_path="Data/trace_output.png"
 ):
     """
     Traces A* paths between each consecutive pair in input_target_list,
@@ -65,51 +66,59 @@ def trace_targets(
             paths.append(path)
             current = tgt
 
-    # 5) flatten and save
-    improved_points = [pt for path in paths for pt in path]
-    with open(output_target_path, "w") as f:
-        for x, y in improved_points:
-            f.write(f"{x},{y}\n")
+    # --- plot & save ---
+    img_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+    fig, ax = plt.subplots(figsize=(10, 8))
+    ax.imshow(img_rgb)
+    ax.axis("off")
 
-    return frame, arena, [r["bbox"] for r in obs], start, targets, paths
+    # arena boundary
+    ax.add_patch(Polygon(arena, closed=True, fill=False,
+                         edgecolor='yellow', linewidth=2))
 
-
-def plot_trace(frame, arena, obstacles, start, targets, paths):
-    img = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-    fig, ax = plt.subplots(figsize=(10,8))
-    ax.imshow(img); ax.set_axis_off()
-
-    # arena
-    poly = Polygon(arena, closed=True, fill=False, edgecolor='yellow', linewidth=2)
-    ax.add_patch(poly)
     # obstacles
-    for x,y,w_,h_ in obstacles:
-        ax.add_patch(Rectangle((x,y), w_, h_, facecolor='red', alpha=0.3))
-    # start
+    for x, y, w_, h_ in [r["bbox"] for r in obs]:
+        ax.add_patch(Rectangle((x, y), w_, h_, facecolor='red', alpha=0.3))
+
+    # robot start
     ax.plot(start[0], start[1], 'o', color='cyan', markersize=10, label='robot')
+
     # raw targets
-    txs, tys = zip(*targets)
-    ax.scatter(txs, tys, s=80, facecolors='none', edgecolors='white', label='targets')
-    # paths
+    if targets:
+        txs, tys = zip(*targets)
+        ax.scatter(txs, tys, s=80, facecolors='none',
+                   edgecolors='white', label='targets')
+
+    # draw paths
     for path in paths:
         xs, ys = zip(*path)
         ax.plot(xs, ys, '-', linewidth=2, color='lime')
 
     ax.legend(loc='upper right')
     plt.tight_layout()
-    plt.show()
+
+    fig.savefig(out_path, bbox_inches='tight')
+    plt.close(fig)
+
+    # 5) flatten and save
+    improved_points = [pt for path in paths for pt in path]
+    with open(output_target_path, "w") as f:
+        for x, y in improved_points:
+            f.write(f"{x},{y}\n")
+
+    return "Path Planned! and saved to {output_target_path}"
 
 
 if __name__ == "__main__":
     DATA_FOLDER  = "Data"
     SPACING      = 20
     # example list of targets instead of a file
-    input_list = [[250,50], [250,80], [350,300]]
+    input_list = [[150,50], [200,80], [350,300]]
 
-    frame, arena, obstacles, start, targets, paths = trace_targets(
+    trace_targets(
         input_target_list=input_list,
         output_target_path="Targets/improved_targets.txt",
         data_folder=DATA_FOLDER,
-        spacing=SPACING
+        spacing=SPACING,
+        out_path="Data/trace_output.png"
     )
-    plot_trace(frame, arena, obstacles, start, targets, paths)

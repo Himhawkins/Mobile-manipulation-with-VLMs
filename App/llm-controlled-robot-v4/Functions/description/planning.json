@@ -1,43 +1,51 @@
 [
   {
     "name": "trace_targets",
-    "description": "Traces A* paths between a list of target coordinates, avoiding obstacles and saving all reachable points to a file.\n\nOutput: Returns a tuple containing the frame image, arena corners, obstacles list, start position, target list, and the calculated paths.\n\nExample Usage: `trace_targets([(50,50), (150,150)], 'Targets/improved.txt', start=(10,10), data_folder='Data', spacing=5)`",
+    "description": "Traces A* paths between a list of target coordinates, avoiding obstacles and saving all reachable points to a file and a visualization image.\n\nOutput: Saves the improved path points to a text file and renders a visual path overlay image with arena, obstacles, and path segments.\n\nExample Usage: `trace_targets([(50,50), (150,150)], 'Targets/improved.txt', start=(10,10), data_folder='Data', spacing=5, out_path='Data/trace_output.png')`",
     "parameters": {
-     "type": "OBJECT",
-     "properties": {
-      "input_target_list": {
-       "type": "ARRAY",
-       "description": "Required. A list of (x,y) tuple target coordinates. This should be provided as a list of lists, e.g., [[50, 50], [150, 150]].",
-       "items": {
-        "type": "ARRAY",
-        "items": {
-         "type": "INTEGER"
+      "type": "OBJECT",
+      "properties": {
+        "input_target_list": {
+          "type": "ARRAY",
+          "description": "Required. A list of (x,y) target coordinates. Provide as a list of lists or tuples, e.g., [[50, 50], [150, 150]].",
+          "items": {
+            "type": "ARRAY",
+            "items": {
+              "type": "INTEGER"
+            }
+          }
+        },
+        "output_target_path": {
+          "type": "STRING",
+          "description": "Path to write the concatenated reachable points to a plain-text CSV file."
+        },
+        "start": {
+          "type": "ARRAY",
+          "description": "Optional start position (x, y). If not provided, the robot's current position from the data folder will be used.",
+          "items": {
+            "type": "INTEGER"
+          }
+        },
+        "data_folder": {
+          "type": "STRING",
+          "description": "Folder containing arena data, obstacle files, and the camera frame image. Defaults to 'Data'."
+        },
+        "spacing": {
+          "type": "INTEGER",
+          "description": "Optional dilation spacing (in pixels) around obstacles to ensure safe A* navigation."
+        },
+        "out_path": {
+          "type": "STRING",
+          "description": "Path to save the output visualization PNG showing arena, obstacles, and traced paths."
         }
-       }
       },
-      "output_target_path": {
-       "type": "STRING",
-       "description": "Optional file path to write the list of improved points to a CSV file."
-      },
-      "start": {
-       "type": "ARRAY",
-       "description": "Optional start coordinate tuple (x,y). Defaults to the robot's current position if not provided.",
-       "items": {
-        "type": "INTEGER"
-       }
-      },
-      "data_folder": {
-       "type": "STRING",
-       "description": "Optional. The folder containing the arena and obstacle data files."
-      },
-      "spacing": {
-       "type": "INTEGER",
-       "description": "Optional. The dilation padding, in pixels, to apply around obstacles."
-      }
-     },
-     "required": [
-      "input_target_list"
-     ]
+      "required": [
+        "input_target_list"
+      ]
+    },
+    "returns": {
+      "type": "STRING",
+      "description": "Confirmation message indicating path generation success and saved file location."
     }
-   }
+  }
 ]
