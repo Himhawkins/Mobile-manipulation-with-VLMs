@@ -234,6 +234,7 @@ def call_gemini_agent(prompt, agent_name,model_ver='gemini-2.5-flash'):
         else:
             print("\n--- Final Gemini Response (No Function Call) ---")
             print(response.text)
+        return response.text
 
     except Exception as e:
         print(f"\nAn error occurred during the Gemini API call: {e}")
