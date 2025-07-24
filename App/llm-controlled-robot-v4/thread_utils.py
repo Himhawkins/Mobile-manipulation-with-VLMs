@@ -43,6 +43,7 @@ def run_task(app):
     save_img_to_path(app.current_frame, save_path="Data/frame_img.png")
     try:
         detect_arena(img_path="Data/frame_img.png", prompt=corner_prompt, save_path="Data/arena_corners.txt")
+        app.after(0, lambda: CTkMessageBox(app, "Status", "Calibrated successfully", "white"))
     except ValueError as e:
         app.after(0, lambda e=e: CTkMessageBox(app, "Detection Error", str(e), "yellow"))
     except Exception as e:

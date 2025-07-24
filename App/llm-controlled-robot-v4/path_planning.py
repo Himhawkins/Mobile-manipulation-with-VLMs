@@ -96,12 +96,13 @@ def plot_trace(frame, arena, obstacles, start, targets, paths):
 if __name__ == "__main__":
     DATA_FOLDER  = "Data"
     TARGETS_FILE = "Targets/targets.txt"
-    SPACING      = 5
+    SPACING      = 20
 
     # Trace and plot
     frame, arena, obstacles, start, targets, paths = trace_targets(
-        data_folder=DATA_FOLDER,
         input_target_path=TARGETS_FILE,
         output_target_path="Targets/improved_targets.txt",
+        data_folder=DATA_FOLDER,
         spacing=SPACING
     )
+    plot_trace(frame, arena, obstacles, start, targets, paths)

@@ -96,7 +96,7 @@ class DashboardApp(ctk.CTk):
         self.input_var = ctk.StringVar()
         self.input_entry = ctk.CTkEntry(action_frame, textvariable=self.input_var, placeholder_text="Enter value...", width=250)
         self.input_entry.grid(row=0, column=0, sticky="ew", padx=(0,5))
-        for idx, name in enumerate(["Run", "Execute"], start=1):
+        for idx, name in enumerate(["Calibrate", "Run", "Execute"], start=1):
             ctk.CTkButton(action_frame, text=name, command=lambda m=name: self.on_mode_action(m)).grid(row=0, column=idx, padx=5)
 
     def on_camera_change(self, value):
@@ -172,11 +172,11 @@ class DashboardApp(ctk.CTk):
             self.on_edit()
 
     def on_mode_action(self, action):
-        if action == "Run":
+        if action == "Calibrate":
             run_in_thread(
             callback=lambda: run_task(self),
-            on_start=lambda: disable_button(self, "Run"),
-            on_complete=lambda: enable_button(self, "Run")
+            on_start=lambda: disable_button(self, "Calibrate"),
+            on_complete=lambda: enable_button(self, "Calibrate")
         )
         elif action == "Execute":
             show_frame_with_overlay(self, self.current_frame)
