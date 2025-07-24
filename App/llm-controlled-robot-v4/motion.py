@@ -30,7 +30,7 @@ def move_robot(
     """
     ser = serial.Serial(serial_port, baud_rate, timeout=1)
     try:
-        while not stop_event.is_set():
+        while 1:#ot stop_event.is_set():
             with open(command_file, 'r') as f:
                 line = f.readline().strip()
 
@@ -55,7 +55,7 @@ def move_robot(
 if __name__ == "__main__":
     SERIAL_PORT = '/dev/ttyACM0'
     BAUD_RATE = 115200
-    INPUT_FILE = 'controls/command.txt'
+    INPUT_FILE = 'Data/command.txt'
     SEND_INTERVAL_S = 0.1
 
     move_robot(SERIAL_PORT, BAUD_RATE, INPUT_FILE, SEND_INTERVAL_S)
