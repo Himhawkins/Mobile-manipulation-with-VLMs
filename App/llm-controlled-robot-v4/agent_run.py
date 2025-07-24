@@ -21,13 +21,3 @@ if __name__ == "__main__":
     ret, frame = cap.read()
     cv2.imwrite("Data/frame_img.png", frame)
     response=call_gemini_agent(user_prompt, agent_name) # frame optional
-
-    
-
-
-
-
-
-
-
-    

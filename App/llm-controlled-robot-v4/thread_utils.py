@@ -62,7 +62,5 @@ def callibrate_task(app):
         app.after(0, lambda e=e: CTkMessageBox(app, "Error", str(e), "red"))
 
 def run_task(text_box, user_prompt, agent_name):
-    # this runs in the background thread
-    call_gemini_agent(user_prompt, agent_name)
-    # now schedule the UI update on the main thread:
-    # text_box.after(0, lambda: set_preview_text(text_box=text_box, text=text_out))
+    text_out = call_gemini_agent(user_prompt, agent_name)
+    text_box.after(0, lambda: set_preview_text(text_box=text_box, text=text_out))
