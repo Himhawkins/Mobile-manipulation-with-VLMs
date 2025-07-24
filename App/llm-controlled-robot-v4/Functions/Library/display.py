@@ -1,6 +1,6 @@
 import cv2
 
-def display_frame(window_name='OpenCV Frame',image_name='live.jpg',folder='Data'):
+def display_frame(window_name='OpenCV Frame',image_name='live.jpg',folder='.'):
     """
     Displays an OpenCV frame in a window.
 
