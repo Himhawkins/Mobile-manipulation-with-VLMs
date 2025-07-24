@@ -1,12 +1,29 @@
-{
-        "detect_objects": {
-            "description": "Detects objects in an image based on a list of text prompts, calculates their centroids, and optionally saves the coordinates to a file.",
-            "inputs": [
-                {"name": "prompt_list", "type": "List[str]", "description": "A list of text prompts to identify objects for detection.", "is_optional": 0},
-                {"name": "img_path", "type": "str", "description": "Path to the input image file.", "is_optional": 1},
-                {"name": "save_path", "type": "str", "description": "Optional file path to save the detected centroid coordinates.", "is_optional": 1}
-            ],
-            "output": {"type": "List[Tuple[int, int]]", "description": "A list of (x, y) coordinates for the centroids of all detected objects."},
-            "usage": "detection.detect_objects(img_path='my_image.png', prompt_list=['robot', 'obstacle'], save_path='centroids.txt')"
-        }
+[
+   {
+    "name": "detect_objects",
+    "description": "Detects objects in an image based on a list of text prompts, calculates their centroids, and optionally saves the coordinates to a file.\n\nOutput: A list of (x, y) coordinates for the centroids of all detected objects, with the type `List[Tuple[int, int]]`.\n\nExample: `detection.detect_objects(img_path='my_image.png', prompt_list=['robot', 'obstacle'], save_path='centroids.txt')`",
+    "parameters": {
+     "type": "OBJECT",
+     "properties": {
+      "prompt_list": {
+       "type": "ARRAY",
+       "description": "A list of text prompts to identify objects for detection.",
+       "items": {
+        "type": "STRING"
+       }
+      },
+      "img_path": {
+       "type": "STRING",
+       "description": "Path to the input image file."
+      },
+      "save_path": {
+       "type": "STRING",
+       "description": "Optional file path to save the detected centroid coordinates."
+      }
+     },
+     "required": [
+      "prompt_list"
+     ]
     }
+   }
+]

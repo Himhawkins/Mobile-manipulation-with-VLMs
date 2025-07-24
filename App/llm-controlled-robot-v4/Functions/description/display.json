@@ -1,23 +1,22 @@
-{
-"display_frame": {
-            "description": "Displays an OpenCV image in a window. This function will load and show the provided image and wait for a keypress. Press any key to close the window.",
-            "inputs": [
-                {
-                    "name": "window_name",
-                    "type": "str",
-                    "description": "The name of the window in which the frame will be shown."
-                },
-                 {
-                    "name": "image_name",
-                    "type": "str",
-                    "description": "The name of the image file to open and display. default name is live.jpg"
-                }
-            ],
-            "output": {
-                "type": "None",
-                "description": "This function does not return a value; it displays a window on the screen."
-            },
-            "usage": "display.display_frame(window_name='My Image', image_name='live.jpg')"
-            
-        } 
-}
+ [
+ {
+    "name": "display_frame",
+    "description": "Displays an OpenCV image from a file in a window. The function waits for a keypress before closing the window.\n\nOutput: This function does not return a value.\n\nExample: `display_frame(window_name='My Image', image_name='capture.jpg')`",
+    "parameters": {
+     "type": "OBJECT",
+     "properties": {
+      "window_name": {
+       "type": "STRING",
+       "description": "The name for the window in which the frame will be displayed."
+      },
+      "image_name": {
+       "type": "STRING",
+       "description": "The name of the image file to open and display. Defaults to 'live.jpg' if not specified."
+      }
+     },
+     "required": [
+      "window_name"
+     ]
+    }
+   }
+]

@@ -1,17 +1,43 @@
-{
-  "trace_targets": {
-    "description": "Traces A* paths between a list of target coordinates, avoiding obstacles and saving all reachable points to a file.",
-    "inputs": [
-      { "name": "input_target_list", "type": "List[Tuple[int, int]]", "description": " Required. List of (x,y) tuple target coordinates. can be multiple coordinates NOT FILE" },
-      { "name": "output_target_path", "type": "str", "description": "Optional File path to write improved point list (CSV)." },
-      { "name": "start", "type": "Tuple[int, int] or None", "description": "Optional start (x,y); defaults to robot_pos in data." },
-      { "name": "data_folder", "type": "str", "description": " Optional Folder containing arena and obstacle data." },
-      { "name": "spacing", "type": "int", "description": "Optional Dilation padding for obstacle mask." }
-    ],
-    "output": {
-      "type": "Tuple[np.ndarray, List[Tuple[int, int]], List[Tuple[int, int, int, int]], Tuple[int, int], List[Tuple[int, int]], List[List[Tuple[int, int]]]]",
-      "description": "Returns (frame image, arena corners, obstacles list, start position, target list, paths list)."
-    },
-    "usage": "trace_targets([(50,50), (150,150)], 'Targets/improved.txt', start=(10,10), data_folder='Data', spacing=5)"
-  }
-}
+[
+  {
+    "name": "trace_targets",
+    "description": "Traces A* paths between a list of target coordinates, avoiding obstacles and saving all reachable points to a file.\n\nOutput: Returns a tuple containing the frame image, arena corners, obstacles list, start position, target list, and the calculated paths.\n\nExample Usage: `trace_targets([(50,50), (150,150)], 'Targets/improved.txt', start=(10,10), data_folder='Data', spacing=5)`",
+    "parameters": {
+     "type": "OBJECT",
+     "properties": {
+      "input_target_list": {
+       "type": "ARRAY",
+       "description": "Required. A list of (x,y) tuple target coordinates. This should be provided as a list of lists, e.g., [[50, 50], [150, 150]].",
+       "items": {
+        "type": "ARRAY",
+        "items": {
+         "type": "INTEGER"
+        }
+       }
+      },
+      "output_target_path": {
+       "type": "STRING",
+       "description": "Optional file path to write the list of improved points to a CSV file."
+      },
+      "start": {
+       "type": "ARRAY",
+       "description": "Optional start coordinate tuple (x,y). Defaults to the robot's current position if not provided.",
+       "items": {
+        "type": "INTEGER"
+       }
+      },
+      "data_folder": {
+       "type": "STRING",
+       "description": "Optional. The folder containing the arena and obstacle data files."
+      },
+      "spacing": {
+       "type": "INTEGER",
+       "description": "Optional. The dilation padding, in pixels, to apply around obstacles."
+      }
+     },
+     "required": [
+      "input_target_list"
+     ]
+    }
+   }
+]

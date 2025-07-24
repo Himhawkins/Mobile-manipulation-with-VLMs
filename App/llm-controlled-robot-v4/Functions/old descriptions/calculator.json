@@ -1,0 +1,22 @@
+{
+    "add": {
+        "description": "Calculate the sum of two numbers.",
+        "inputs": [
+            {
+                "name": "a",
+                "type": "float",
+                "description": "The first number."
+            },
+            {
+                "name": "b",
+                "type": "float",
+                "description": "The second number."
+            }
+        ],
+        "output": {
+            "type": "float",
+            "description": "The sum of a and b."
+        },
+        "usage": "result = add(a=5, b=10)"
+    }
+}

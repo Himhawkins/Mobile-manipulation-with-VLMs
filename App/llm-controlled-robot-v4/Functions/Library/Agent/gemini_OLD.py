@@ -172,15 +172,15 @@ def call_gemini_agent(prompt, agent_name,model_ver='gemini-2.5-flash'):
         print("Could not load any function details. Aborting.")
         return
 
-    # # 3. Get Gemini tool list
-    # gemini_tool_definitions = gemini_tool_list(function_details)
-    # if not gemini_tool_definitions:
-    #     print("Could not create Gemini tool definitions. Aborting.")
-    #     return
-    # print(gemini_tool_definitions)   
-    # # 4. Create Gemini Tool objects
+    # 3. Get Gemini tool list
+    gemini_tool_definitions = gemini_tool_list(function_details)
+    if not gemini_tool_definitions:
+        print("Could not create Gemini tool definitions. Aborting.")
+        return
+    print(gemini_tool_definitions)   
+    # 4. Create Gemini Tool objects
     try:
-        function_declarations = [FunctionDeclaration(**tool) for tool in function_details]
+        function_declarations = [FunctionDeclaration(**tool) for tool in gemini_tool_definitions]
         agent_tool = Tool(function_declarations=function_declarations)
     except Exception as e:
         print(f"Error creating Gemini Tool object: {e}")

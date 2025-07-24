@@ -1,11 +1,21 @@
-{
-    "create_code": {
-        "description": "Takes a python program as docstring and saves it to the file",
-        "inputs": [
-            {"name": "code", "type": "docstring", "description": "Python Code"},
-            {"name": "output_file", "type": "string", "description": "The name of the output file to store the code in"}
-        ],
-        "output": {"type": "string", "description": "Saving status success or failure"},
-        "usage": "ret = create_code('print('hello world')','output.txt' )"
+ {
+    "name": "create_code",
+    "description": "Writes a string of Python code to a specified file.\n\nOutput: Returns a status string, such as 'success' or 'failure'.\n\nExample: `create_code(code='print(\"hello world\")', output_file='output.py')`",
+    "parameters": {
+     "type": "OBJECT",
+     "properties": {
+      "code": {
+       "type": "STRING",
+       "description": "A string containing the Python code to be saved."
+      },
+      "output_file": {
+       "type": "STRING",
+       "description": "The name of the output file where the code will be stored (e.g., 'my_script.py')."
+      }
+     },
+     "required": [
+      "code",
+      "output_file"
+     ]
     }
-}
+   }
