@@ -3,6 +3,13 @@ import customtkinter as ctk
 
 from ui_utils import CTkMessageBox, get_app_settings
 from detection import detect_arena, detect_and_get_bbox, save_img_to_path
+from Functions.Library.Agent.gemini import call_gemini_agent
+
+def set_preview_text(text_box, text: str):
+    text_box.configure(state="normal")
+    text_box.delete("1.0", ctk.END)      # ← use 1.0
+    text_box.insert("1.0", text)         # ← use 1.0
+    text_box.configure(state="disabled")
 
 def run_in_thread(callback, on_start=None, on_complete=None):
     """
@@ -35,8 +42,8 @@ def enable_button(app, btn_name):
             for btn in child.winfo_children():
                 if isinstance(btn, ctk.CTkButton) and btn.cget("text") == btn_name:
                     btn.configure(state="normal")
-
-def run_task(app):
+    
+def callibrate_task(app):
     app.settings = get_app_settings()
     corner_prompt = app.settings.get("corner_prompt")
     obstacle_prompt = app.settings.get("obstacle_prompt")
@@ -54,3 +61,8 @@ def run_task(app):
     except Exception as e:
         app.after(0, lambda e=e: CTkMessageBox(app, "Error", str(e), "red"))
 
+def run_task(text_box, user_prompt, agent_name):
+    # this runs in the background thread
+    call_gemini_agent(user_prompt, agent_name)
+    # now schedule the UI update on the main thread:
+    # text_box.after(0, lambda: set_preview_text(text_box=text_box, text=text_out))

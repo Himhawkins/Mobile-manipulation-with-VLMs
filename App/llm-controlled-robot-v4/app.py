@@ -11,7 +11,7 @@ from camera_utils import start_camera, read_frame, display_frame, draw_robot_pos
 from agent_utils import save_agent_to_disk, get_agent_folders, get_agent_functions, get_all_functions
 from port_utils import refresh_cameras, refresh_serial_ports
 from detection import detect_robot_pose
-from thread_utils import run_in_thread, disable_button, enable_button, run_task
+from thread_utils import run_in_thread, disable_button, enable_button, callibrate_task, run_task
 from ui_utils import overlay_arena_and_obstacles, show_frame_with_overlay
 
 class DashboardApp(ctk.CTk):
@@ -62,15 +62,15 @@ class DashboardApp(ctk.CTk):
         self.cap = None
         self.on_camera_change(self.camera_var.get())
 
-        preview1_txt = ctk.CTkTextbox(
+        self.preview1_txt = ctk.CTkTextbox(
             middle_frame,
             width=700,
             border_width=1,
             corner_radius=8,
             state="disabled"
         )
-        preview1_txt.grid(row=0, column=1, sticky="nsew", pady=(10,5), padx=(5,10))
-        preview1_txt.grid_propagate(False)
+        self.preview1_txt.grid(row=0, column=1, sticky="nsew", pady=(10,5), padx=(5,10))
+        self.preview1_txt.grid_propagate(False)
         preview2 = ctk.CTkFrame(middle_frame, width=700, border_width=1, corner_radius=8)
         preview2.grid(row=1, column=1, sticky="nsew", pady=(5,10), padx=(5,10))
         preview2.grid_propagate(False)
@@ -176,10 +176,17 @@ class DashboardApp(ctk.CTk):
     def on_mode_action(self, action):
         if action == "Calibrate":
             run_in_thread(
-            callback=lambda: run_task(self),
+            callback=lambda: callibrate_task(self),
             on_start=lambda: disable_button(self, "Calibrate"),
             on_complete=lambda: enable_button(self, "Calibrate")
-        )
+            )
+        elif action == "Run":
+            # print(str(self.mode_var.get()))
+            run_in_thread(
+            callback=lambda: run_task(self.preview1_txt, str(self.input_var.get()), str(self.mode_var.get())),
+            on_start=lambda: disable_button(self, "Run"),
+            on_complete=lambda: enable_button(self, "Run")
+            )
         elif action == "Execute":
             show_frame_with_overlay(self, self.current_frame)
 
