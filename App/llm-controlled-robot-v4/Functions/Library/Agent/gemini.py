@@ -187,7 +187,7 @@ def call_gemini_agent(prompt, agent_name,model_ver='gemini-2.5-flash'):
         return
 
     # 5. Combine prompt, background, and function details
-    function_documentation = "\n".join(function_details)
+    function_documentation = "\n".join(str(function_details))
     full_prompt = (
         f"Agent Background: {background}\n\n"
         f"Function Documentation:\n{function_documentation}\n\n"
