@@ -69,17 +69,27 @@ def detect_and_get_bbox(img_path="Data/frame_img.png", prompt="Blue Cricles", sa
                     f.write(f"{x},{y},{w},{h}\n")
     return obstacles
 
-def detect_arena(img_path="Data/frame_img.png", prompt="Blue Cricles", save_path=None):
+def detect_arena(img_path="Data/frame_img.png", prompt="Blue Circles", save_path=None):
     frame = cv2.imread(img_path)
     corners, count = detect_and_list(frame, prompt)
-    centroids = [o["centroid"] for o in corners]
-    if save_path is not None:
-            with open(save_path, "w") as f:
-                for x, y in centroids:
-                    f.write(f"{x},{y}\n")
-    if len(corners) != 4:
-        raise ValueError(f"Expected 4 markers, but found {len(corners)}")
-    return centroids
+    centroids = [tuple(o["centroid"]) for o in corners]
+    if len(centroids) != 4:
+        raise ValueError(f"Expected 4 markers, but found {len(centroids)}")
+    # --- sort into UL, LL, LR, UR ---
+    # 1. sort by y (row): top two first, bottom two last
+    centroids_sorted = sorted(centroids, key=lambda p: p[1])
+    top_two    = centroids_sorted[:2]
+    bottom_two = centroids_sorted[2:]
+    # 2. within each pair, sort by x (column)
+    top_left,    top_right    = sorted(top_two,    key=lambda p: p[0])
+    bottom_left, bottom_right = sorted(bottom_two, key=lambda p: p[0])
+    ordered = [top_left, bottom_left, bottom_right, top_right]
+    # ---------------------------------
+    if save_path:
+        with open(save_path, "w") as f:
+            for x, y in ordered:
+                f.write(f"{x},{y}\n")
+    return ordered
 
 def detect_objects(img_path="Data/frame_img.png", prompt_list=["A","B","C"], save_path=None):
     frame = cv2.imread(img_path)
