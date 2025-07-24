@@ -1,7 +1,7 @@
 [
   {
     "name": "trace_targets",
-    "description": "Traces A* paths between a list of target coordinates, avoiding obstacles and saving all reachable points to a file and a visualization image.\n\nOutput: Saves the improved path points to a text file and renders a visual path overlay image with arena, obstacles, and path segments.\n\nExample Usage: `trace_targets([(50,50), (150,150)], 'Targets/improved.txt', start=(10,10), data_folder='Data', spacing=5, out_path='Data/trace_output.png')`",
+    "description": "Traces A* paths between a list of target coordinates, avoiding obstacles and saving all reachable points to a file and a visualization image.\n\nOutput: Saves the improved path points to a text file and renders a visual path overlay image with arena, obstacles, and path segments.\n\nExample Usage: `trace_targets([(50,50), (150,150)], 'Targets/improved.txt', start=(10,10), data_folder='Data', spacing=5, out_path='Data/trace_overlay.png')`",
     "parameters": {
       "type": "OBJECT",
       "properties": {

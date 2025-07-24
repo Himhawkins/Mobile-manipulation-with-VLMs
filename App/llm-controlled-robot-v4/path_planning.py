@@ -14,7 +14,7 @@ def trace_targets(
     start=None,
     data_folder="Data",
     spacing=20,
-    out_path="Data/trace_output.png"
+    out_path="Data/trace_overlay.png"
 ):
     """
     Traces A* paths between each consecutive pair in input_target_list,
@@ -120,5 +120,5 @@ if __name__ == "__main__":
         output_target_path="Targets/improved_targets.txt",
         data_folder=DATA_FOLDER,
         spacing=SPACING,
-        out_path="Data/trace_output.png"
+        out_path="Data/trace_overlay.png"
     )

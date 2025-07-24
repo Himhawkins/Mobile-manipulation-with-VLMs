@@ -42,10 +42,10 @@ class FileInterface:
     def _initialize_files(self):
         # default targets: one "x,y,theta" per line
         default_targets = [
-            f"{5},{0},{math.pi/2}",
-            f"{5},{5},{math.pi}",
-            f"{0},{5},{-math.pi/2}",
-            f"{0},{0},{0.0}",
+            f"{5},{0}",
+            f"{5},{5}",
+            f"{0},{5}",
+            f"{0},{0}",
         ]
         _ensure_txt(self.target_file, default_targets)
 
@@ -183,7 +183,7 @@ class PIDController:
             with open(self.iface.target_file, 'w') as f:
                 f.write(f"({idx}/{total})\n")
                 for x, y, th in targets:
-                    f.write(f"{x},{y},{th}\n")
+                    f.write(f"{int(x)},{int(y)}\n")
         except Exception as e:
             print(f"Error updating targets file header: {e}")
 

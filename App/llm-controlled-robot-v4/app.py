@@ -12,7 +12,7 @@ from agent_utils import save_agent_to_disk, get_agent_folders, get_agent_functio
 from port_utils import refresh_cameras, refresh_serial_ports
 from detection import detect_robot_pose
 from thread_utils import run_in_thread, disable_button, enable_button, callibrate_task, run_task
-from ui_utils import overlay_arena_and_obstacles, show_frame_with_overlay
+from ui_utils import overlay_arena_and_obstacles, show_trace_overlay
 from controller import exec_bot
 
 class DashboardApp(ctk.CTk):
@@ -61,7 +61,7 @@ class DashboardApp(ctk.CTk):
         self.video_label = ctk.CTkLabel(self.video_frame, text="", fg_color="black", corner_radius=10)
         self.video_label.pack(expand=True, fill="both")
         self.cap = None
-        self.on_camera_change(self.camera_var.get())
+        self.after(500, lambda: self.on_camera_change(self.camera_var.get()))
 
         self.preview1_txt = ctk.CTkTextbox(
             middle_frame,
@@ -72,10 +72,13 @@ class DashboardApp(ctk.CTk):
         )
         self.preview1_txt.grid(row=0, column=1, sticky="nsew", pady=(10,5), padx=(5,10))
         self.preview1_txt.grid_propagate(False)
-        preview2 = ctk.CTkFrame(middle_frame, width=700, border_width=1, corner_radius=8)
-        preview2.grid(row=1, column=1, sticky="nsew", pady=(5,10), padx=(5,10))
-        preview2.grid_propagate(False)
-        ctk.CTkLabel(preview2, text="Preview 2").pack(expand=True)
+        self.preview2 = ctk.CTkFrame(middle_frame, width=700, border_width=1, corner_radius=8)
+        self.preview2.grid(row=1, column=1, sticky="nsew", pady=(5,10), padx=(5,10))
+        self.preview2.grid_propagate(False)
+
+        self.preview2_img_label = ctk.CTkLabel(self.preview2, text="")  # no text, will hold image
+        self.preview2_img_label.pack(expand=True, fill="both")
+
 
         # Bottom Section
         bottom_frame = ctk.CTkFrame(self)
@@ -142,6 +145,9 @@ class DashboardApp(ctk.CTk):
         if img:
             self.video_label.configure(image=img)
             self.video_label.image = img
+        
+        show_trace_overlay(self, self.preview2, self.preview2_img_label)
+
         self.after(16, self.on_update_video)
 
     def on_refresh_cameras(self):

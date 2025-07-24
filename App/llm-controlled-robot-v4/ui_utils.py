@@ -2,7 +2,7 @@ import customtkinter as ctk
 import json
 import os
 import cv2
-from PIL import Image
+from PIL import Image, ImageTk
 import numpy as np
 
 class CTkMessageBox(ctk.CTkToplevel):
@@ -202,3 +202,39 @@ def show_frame_with_overlay(parent, frame, arena_path="Data/arena_corners.txt", 
     popup.lift()
     popup.focus()
     popup.grab_set()
+
+def show_trace_overlay(app, preview_frame, image_label):
+    if not preview_frame or not image_label:
+        return
+    img_path = "Data/trace_overlay.png"
+    if not os.path.exists(img_path):
+        return
+    if not hasattr(app, "_trace_overlay"):
+        app._trace_overlay = {
+            "path": img_path,
+            "last_mtime": 0,
+            "ctk_image": None
+        }
+    state = app._trace_overlay
+    try:
+        mtime = os.path.getmtime(img_path)
+        if mtime == state["last_mtime"]:
+            return  # No update needed
+        frame_w, frame_h = preview_frame.winfo_width(), preview_frame.winfo_height()
+        if frame_w < 2 or frame_h < 2:
+            app.after(100, lambda: show_trace_overlay(app, preview_frame, image_label))
+            return
+        pil_img = Image.open(img_path).convert("RGB")
+        img_w, img_h = pil_img.size
+        # Compute new size preserving aspect ratio
+        scale = min(frame_w / img_w, frame_h / img_h)
+        target_w = int(img_w * scale)
+        target_h = int(img_h * scale)
+        resized_img = pil_img.resize((target_w, target_h), Image.LANCZOS)
+        ctk_img = ctk.CTkImage(light_image=resized_img, size=(target_w, target_h))
+        image_label.configure(image=ctk_img, text="")
+        image_label.image = ctk_img
+        state["last_mtime"] = mtime
+        state["ctk_image"] = ctk_img
+    except Exception as e:
+        print(f"[show_trace_overlay] Failed to load overlay: {e}")
