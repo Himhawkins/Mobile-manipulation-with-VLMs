@@ -127,6 +127,38 @@ def open_settings_popup(app):
     ctk.CTkButton(btn_frame, text="Save", command=save_settings).pack(side="left", padx=10)
     ctk.CTkButton(btn_frame, text="Cancel", command=close_popup).pack(side="right", padx=10)
 
+def overlay_arena_and_obstacles(frame, arena_path="Data/arena_corners.txt", obstacles_path="Data/obstacles.txt"):
+    overlay = frame.copy()
+    # 1. Draw arena (yellow polygon)
+    try:
+        with open(arena_path, "r") as f:
+            arena_pts = [list(map(int, line.strip().split(",")))
+                         for line in f if line.strip()]
+        if len(arena_pts) == 4:
+            pts = np.array(arena_pts, dtype=np.int32).reshape((-1, 1, 2))
+            cv2.polylines(overlay, [pts], isClosed=True,
+                          color=(0, 255, 255), thickness=2)
+        else:
+            print(f"[WARN] '{arena_path}' does not contain exactly 4 points.")
+    except Exception as e:
+        print(f"[ERROR] Could not read arena corners from '{arena_path}': {e}")
+    # 2. Draw obstacles (red rectangles)
+    try:
+        with open(obstacles_path, "r") as f:
+            for line in f:
+                parts = line.strip().split(",")
+                if len(parts) != 4:
+                    continue
+                x, y, w, h = map(int, parts)
+                cv2.rectangle(overlay,
+                              (x, y),
+                              (x + w, y + h),
+                              color=(0, 0, 255),
+                              thickness=-1)  # filled
+    except Exception as e:
+        print(f"[ERROR] Could not read obstacles from '{obstacles_path}': {e}")
+    return overlay
+
 def show_frame_with_overlay(parent, frame, arena_path="Data/arena_corners.txt", obstacles_path="Data/obstacles.txt"):
     overlay = frame.copy()
     # 1. Draw arena (green polygon)

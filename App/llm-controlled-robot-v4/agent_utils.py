@@ -30,7 +30,7 @@ def get_agent_functions(folder):
             groups.setdefault(lib, []).append(name)
     return groups
 
-def get_all_functions(desc_dir="Functions/description"):
+# def get_all_functions(desc_dir="Functions/description"):
     """
     Reads all function descriptions from JSON files in the description directory.
     Returns a dict {library: [function names]}.
@@ -47,6 +47,40 @@ def get_all_functions(desc_dir="Functions/description"):
             patterns[key] = list(data.keys())
         except Exception as e:
             print(f"Failed to load {path}: {e}")
+    return patterns
+
+import os, json
+
+def get_all_functions(desc_dir="Functions/description"):
+    """
+    Reads all function descriptions from JSON files in the description directory.
+    Supports two formats:
+      1) OLD: { "func_name": { … }, … }
+      2) NEW: [ { "name": "func_name", … }, { "name": "other", … }, … ]
+    Returns a dict { library_name: [function names] }.
+    """
+    patterns = {}
+    for fname in os.listdir(desc_dir):
+        if not fname.endswith(".json"):
+            continue
+        lib_name = os.path.splitext(fname)[0]
+        path = os.path.join(desc_dir, fname)
+        try:
+            with open(path, "r") as f:
+                data = json.load(f)
+            if isinstance(data, dict):
+                # old format: top-level keys are function names
+                names = list(data.keys())
+            elif isinstance(data, list):
+                # new format: list of objects with a "name" field
+                names = [item["name"] for item in data
+                         if isinstance(item, dict) and "name" in item]
+            else:
+                print(f"[WARN] Unrecognized JSON structure in {path}; skipping.")
+                continue
+            patterns[lib_name] = names
+        except Exception as e:
+            print(f"[ERROR] Failed to load {path}: {e}")
     return patterns
 
 def save_agent_to_disk(popup, old_folder, new_name, desc_text, check_groups):
@@ -99,3 +133,8 @@ def save_agent_to_disk(popup, old_folder, new_name, desc_text, check_groups):
             json.dump(function_data, f, indent=4)
     except Exception as e:
         print(f"Failed to save functions: {e}")
+
+
+if __name__ == "__main__":
+    get_all_functions = get_all_functions()
+    print(get_all_functions)

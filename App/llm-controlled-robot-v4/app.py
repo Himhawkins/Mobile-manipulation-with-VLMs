@@ -12,7 +12,7 @@ from agent_utils import save_agent_to_disk, get_agent_folders, get_agent_functio
 from port_utils import refresh_cameras, refresh_serial_ports
 from detection import detect_robot_pose
 from thread_utils import run_in_thread, disable_button, enable_button, run_task
-from ui_utils import show_frame_with_overlay
+from ui_utils import overlay_arena_and_obstacles, show_frame_with_overlay
 
 class DashboardApp(ctk.CTk):
     def __init__(self):
@@ -132,9 +132,11 @@ class DashboardApp(ctk.CTk):
         if pose is not None:
             cx, cy, theta, pts = pose
             d_frame = draw_robot_pose(self.current_frame, cx, cy, theta, pts)
-            draw_frame = d_frame
+            arena_obs_frame = overlay_arena_and_obstacles(frame=d_frame, arena_path="Data/arena_corners.txt", obstacles_path="Data/obstacles.txt")
+            draw_frame = arena_obs_frame
         else:
             draw_frame = self.current_frame
+        # arena_obs_frame = overlay_arena_and_obstacles(frame=draw_frame, arena_path="Data/arena_corners.txt", obstacles_path="Data/obstacles.txt")
         img = display_frame(frame=draw_frame, target_w=cw, target_h=ch)
         if img:
             self.video_label.configure(image=img)

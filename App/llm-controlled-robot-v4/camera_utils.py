@@ -24,17 +24,17 @@ def display_frame(frame, target_w, target_h):
     resizes it with letterboxing to fit the given dimensions,
     and returns a CTkImage suitable for CustomTkinter display.
     """
-    
-    frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-    fh, fw = frame.shape[:2]
+    frame_copy = frame.copy()
+    frame_copy = cv2.cvtColor(frame_copy, cv2.COLOR_BGR2RGB)
+    fh, fw = frame_copy.shape[:2]
 
     scale = min(target_w / fw, target_h / fh)
     nw, nh = int(fw * scale), int(fh * scale)
-    frame_resized = cv2.resize(frame, (nw, nh), interpolation=cv2.INTER_AREA)
+    frame_copy_resized = cv2.resize(frame_copy, (nw, nh), interpolation=cv2.INTER_AREA)
 
     canvas = np.zeros((target_h, target_w, 3), dtype=np.uint8)
     x0, y0 = (target_w - nw) // 2, (target_h - nh) // 2
-    canvas[y0:y0+nh, x0:x0+nw] = frame_resized
+    canvas[y0:y0+nh, x0:x0+nw] = frame_copy_resized
 
     pil_img = Image.fromarray(canvas)
     return ctk.CTkImage(light_image=pil_img, size=(target_w, target_h))
@@ -59,16 +59,17 @@ def draw_robot_pose(frame, x, y, theta, corners=None,
     - radius: circle radius at center
     - line_len: length of orientation line
     """
+    frame_copy = frame.copy()
     if corners is not None:
         pts = np.array(corners, dtype=np.int32).reshape((-1, 1, 2))
-        cv2.polylines(frame, [pts], isClosed=True, color=box_color, thickness=box_thickness)
+        cv2.polylines(frame_copy, [pts], isClosed=True, color=box_color, thickness=box_thickness)
 
     # Draw center point
-    cv2.circle(frame, (int(x), int(y)), center_radius, center_color, -1)
+    cv2.circle(frame_copy, (int(x), int(y)), center_radius, center_color, -1)
 
     # Draw heading line
     x2 = int(x + line_len * math.cos(theta))
     y2 = int(y + line_len * math.sin(theta))
-    cv2.line(frame, (int(x), int(y)), (x2, y2), line_color, line_thickness)
+    cv2.line(frame_copy, (int(x), int(y)), (x2, y2), line_color, line_thickness)
 
-    return frame
+    return frame_copy
