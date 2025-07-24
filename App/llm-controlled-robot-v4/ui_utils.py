@@ -18,6 +18,7 @@ class CTkMessageBox(ctk.CTkToplevel):
         except Exception:
             pass
         self.focus_force()
+        print(f"[]")
         ctk.CTkLabel(self, text=message, text_color=text_color).pack(pady=(20, 20), padx=20)
         ctk.CTkButton(self, text="OK", command=self.destroy).pack(pady=(0, 5))
         self.wait_window()
