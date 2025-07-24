@@ -13,6 +13,7 @@ from port_utils import refresh_cameras, refresh_serial_ports
 from detection import detect_robot_pose
 from thread_utils import run_in_thread, disable_button, enable_button, callibrate_task, run_task
 from ui_utils import overlay_arena_and_obstacles, show_frame_with_overlay
+from controller import exec_bot
 
 class DashboardApp(ctk.CTk):
     def __init__(self):
@@ -188,7 +189,15 @@ class DashboardApp(ctk.CTk):
             on_complete=lambda: enable_button(self, "Run")
             )
         elif action == "Execute":
-            show_frame_with_overlay(self, self.current_frame)
+            #show_frame_with_overlay(self, self.current_frame)
+            run_in_thread(
+            callback=lambda: exec_bot(),
+            on_start=lambda: disable_button(self, "Execute"),
+            on_complete=lambda: enable_button(self, "Execute")
+            )
+            # run_in_thread(
+            # callback=lambda: move_bot(self)
+            # )
 
     def on_edit(self):
         if getattr(self, "edit_popup", None) is not None and self.edit_popup.winfo_exists():

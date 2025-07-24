@@ -3,5 +3,5 @@
     "arena_width": "1200",
     "arena_height": "900",
     "corner_prompt": "Blue Circles",
-    "obstacle_prompt": "Obstacles Black Rectangles"
+    "obstacle_prompt": "Solid Black Rectangles"
 }

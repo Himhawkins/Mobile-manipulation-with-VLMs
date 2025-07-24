@@ -91,13 +91,14 @@ class FileInterface:
         """
         lines = self._load_lines(self.target_file)
         # drop header "(i/N)" if first line matches pattern
-        if lines and lines[0].startswith('(') and '/' in lines[0]:
-            lines = lines[1:]
+        # if lines and lines[0].startswith('(') and '/' in lines[0]:
+        #     lines = lines[1:]
         targets = []
         for line in lines:
             try:
-                x_str, y_str, th_str = line.split(',')
-                targets.append((float(x_str), float(y_str), float(th_str)))
+                x_str, y_str = line.split(',')
+                print("YOOOOO:::",line)
+                targets.append((float(x_str), float(y_str)))#, float(th_str)))
             except Exception as e:
                 print(f"Warning: Skipping malformed target line '{line}': {e}")
         return targets
@@ -200,7 +201,7 @@ class PIDController:
         max_lin = 15
 
         # initial header at (0/total)
-        self._write_targets_header(idx, total, targets)
+        #self._write_targets_header(idx, total, targets)
 
         while idx < total:
             now = time.time()
@@ -211,7 +212,7 @@ class PIDController:
             self.prev_time = now
 
             x, y, theta = self.iface.read_pos()
-            tx, ty, _ = targets[idx]
+            tx, ty = targets[idx]
             dist_err = math.hypot(tx - x, ty - y)
             heading = math.atan2(ty - y, tx - x)
 
@@ -277,7 +278,7 @@ class PIDController:
 def run_controller(
     target_file, pose_file, command_file, error_file,
     Kp_dist=0.2, Kp_ang=4.0, Ki_ang=0.07, Kd_ang=0.7,
-    dist_tolerance=10, ang_tolerance=0.1
+    dist_tolerance=15, ang_tolerance=0.1
 ):
     """
     Convenience function to run the PID controller using text file paths.
@@ -299,6 +300,29 @@ if __name__ == "__main__":
     pose_file    = str(Path("controls") / "pose.txt")
     command_file = str(Path("controls") / "command.txt")
     error_file   = str(Path("controls") / "error.txt")
+
+    print("Starting demo run of PID controller…")
+    try:
+        run_controller(
+            target_file,
+            pose_file,
+            command_file,
+            error_file
+        )
+    except Exception as e:
+        print(f"An error occurred during the controller run: {e}")
+    finally:
+        print(f"Demo run completed. Files used:\n"
+              f"  Targets:  {target_file}\n"
+              f"  Pose:     {pose_file}\n"
+              f"  Command:  {command_file}\n"
+              f"  Error:    {error_file}")
+
+def exec_bot():
+    target_file  = str(Path("Targets") / "path.txt")
+    pose_file    = str(Path("Data") / "pose.txt")
+    command_file = str(Path("Data") / "command.txt")
+    error_file   = str(Path("Data") / "error.txt")
 
     print("Starting demo run of PID controller…")
     try:
