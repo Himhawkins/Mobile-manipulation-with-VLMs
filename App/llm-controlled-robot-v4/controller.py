@@ -188,7 +188,7 @@ class PIDController:
         except Exception as e:
             print(f"Error updating targets file header: {e}")
 
-    def run(self):
+    def run(self, stop_event=None):
         """
         Executes the PID control loop to navigate through the targets.
         """
@@ -204,7 +204,7 @@ class PIDController:
         # initial header at (0/total)
         #self._write_targets_header(idx, total, targets)
         i=0
-        while idx < total:
+        while idx < total and not (stop_event and stop_event.is_set()):
             now = time.time()
             dt = now - self.prev_time
             if dt <= 0:
@@ -263,8 +263,8 @@ class PIDController:
 
             left = base_speed + (move_flag * dir_mult * lin_ctrl) - ang_ctrl
             right = base_speed + (move_flag * dir_mult * lin_ctrl) + ang_ctrl
-            if self.Kd_ang * deriv_ang !=0:
-                print(self.Kd_ang * deriv_ang)
+            # if self.Kd_ang * deriv_ang !=0:
+            #     print(self.Kd_ang * deriv_ang)
             left = max(70, min(110, self.adjust_speed(left)))
             right = max(70, min(110, self.adjust_speed(right)))
             #print("EXECUTING:::",tx, " ",ty, " COMMAND SENT: ",left," ,",right ,"P :",self.Kp_ang * ang_err , " D: ",(ang_err - self.prev_ang_err)  , " I: ", self.Ki_ang * self.integral_ang )
@@ -295,7 +295,7 @@ class PIDController:
 def run_controller(
     target_file, pose_file, command_file, error_file,
     Kp_dist=0.2, Kp_ang=4.0, Ki_ang=0.11,Kd_ang=-0.001, #0.7, #0.7, #0.7, # 0.07 
-    dist_tolerance=15, ang_tolerance=12, final_distance_tol=10
+    dist_tolerance=15, ang_tolerance=12, final_distance_tol=10, stop_event=None
 ):
     """
     Convenience function to run the PID controller using text file paths.
@@ -308,7 +308,7 @@ def run_controller(
         dist_tolerance=dist_tolerance,
         ang_tolerance=ang_tolerance,final_distance_tol=final_distance_tol
     )
-    controller.run()
+    controller.run(stop_event=stop_event)
 
 
 def exec_bot():
@@ -324,6 +324,30 @@ def exec_bot():
             pose_file,
             command_file,
             error_file
+        )
+    except Exception as e:
+        print(f"An error occurred during the controller run: {e}")
+    finally:
+        print(f"Demo run completed. Files used:\n"
+              f"  Targets:  {target_file}\n"
+              f"  Pose:     {pose_file}\n"
+              f"  Command:  {command_file}\n"
+              f"  Error:    {error_file}")
+
+def exec_bot_with_thread(stop_event):
+    target_file  = str(Path("Targets") / "path.txt")
+    pose_file    = str(Path("Data") / "robot_pos.txt")
+    command_file = str(Path("Data") / "command.txt")
+    error_file   = str(Path("Data") / "error.txt")
+
+    print("Starting demo run of PID controller…")
+    try:
+        run_controller(
+            target_file,
+            pose_file,
+            command_file,
+            error_file,
+            stop_event=stop_event
         )
     except Exception as e:
         print(f"An error occurred during the controller run: {e}")
