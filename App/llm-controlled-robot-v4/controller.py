@@ -97,7 +97,7 @@ class FileInterface:
         for line in lines:
             try:
                 x_str, y_str = line.split(',')
-                print("YOOOOO:::",line)
+                
                 targets.append((float(x_str), float(y_str)))#, float(th_str)))
             except Exception as e:
                 print(f"Warning: Skipping malformed target line '{line}': {e}")
@@ -146,7 +146,7 @@ class PIDController:
     def __init__(
         self, iface: FileInterface,
         Kp_dist=0.2, Kp_ang=4.0, Ki_ang=0.07, Kd_ang=0.7,
-        dist_tolerance=0.05, ang_tolerance=0.1
+        dist_tolerance=0.05, ang_tolerance=0.1,final_distance_tol=0.05
     ):
         self.iface = iface
         self.Kp_dist = Kp_dist
@@ -158,6 +158,7 @@ class PIDController:
         self.integral_ang = 0.0
         self.prev_ang_err = 0.0
         self.prev_time = time.time()
+        self.final_distance_tol=final_distance_tol
 
     @staticmethod
     def normalize(angle):
@@ -202,7 +203,7 @@ class PIDController:
 
         # initial header at (0/total)
         #self._write_targets_header(idx, total, targets)
-
+        i=0
         while idx < total:
             now = time.time()
             dt = now - self.prev_time
@@ -215,17 +216,28 @@ class PIDController:
             tx, ty = targets[idx]
             dist_err = math.hypot(tx - x, ty - y)
             heading = math.atan2(ty - y, tx - x)
-
+            print("EXECUTING:::",tx, " ",ty)
+         
             if dist_err < self.dist_tolerance:
-                print(f"Reached target {idx+1}/{total} at ({x:.2f}, {y:.2f}). Moving to next.")
-                idx += 1
+                if idx+1==total:
+                    if dist_err < self.final_distance_tol:
+                        print("REACHED END!")
+                        idx += 1
+                        continue
+                else:
+                    print(f"Reached target {idx+1}/{total} at ({x:.2f}, {y:.2f}). Moving to next.")
+                    idx += 1
+                    #time.sleep(0.01)
+                    # if i%15==0:
+                    self.integral_ang = 0.0
+                    self.prev_ang_err = 0.0
+                    #self.iface.write_command(base_speed, base_speed)
+                    continue
                 # update header to (idx/total)
-                self._write_targets_header(idx, total, targets)
-                self.integral_ang = 0.0
-                self.prev_ang_err = 0.0
-                self.iface.write_command(base_speed, base_speed)
-                time.sleep(0.5)
-                continue
+                #self._write_targets_header(idx, total, targets)
+
+                #self.iface.write_command(base_speed, base_speed)
+                
 
             ang_err = self.normalize(heading - theta)
             dir_mult = 1
@@ -234,6 +246,9 @@ class PIDController:
                 dir_mult = -1
 
             self.integral_ang += ang_err * dt
+            # if self.prev_ang_err==0:
+            #     deriv_ang=0
+            # else:
             deriv_ang = (ang_err - self.prev_ang_err) / dt
             self.prev_ang_err = ang_err
 
@@ -243,33 +258,33 @@ class PIDController:
                 self.Kd_ang * deriv_ang
             )
             lin_ctrl = max(-max_lin, min(max_lin, self.Kp_dist * dist_err))
-            move_flag = 1 if abs(math.degrees(ang_err)) <= 5 else 0
+            move_flag = 1 if abs(math.degrees(ang_err)) <= self.ang_tolerance else 0
 
             left = base_speed + (move_flag * dir_mult * lin_ctrl) - ang_ctrl
             right = base_speed + (move_flag * dir_mult * lin_ctrl) + ang_ctrl
 
             left = max(70, min(110, self.adjust_speed(left)))
             right = max(70, min(110, self.adjust_speed(right)))
-
+            print("EXECUTING:::",tx, " ",ty, " COMMAND SENT: ",left," ,",right)
             self.iface.write_command(left, right)
             self.iface.log_error(dist_err, ang_err)
-            time.sleep(0.05)
+            #time.sleep(0.01)
 
         # Final orientation adjustment
-        print(f"All targets reached. Adjusting final orientation to {targets[-1][2]:.2f} radians.")
-        final_th = targets[-1][2]
-        while True:
-            _, _, theta = self.iface.read_pos()
-            err = self.normalize(final_th - theta)
-            if abs(err) < self.ang_tolerance:
-                print(f"Final orientation aligned: {theta:.2f} rad.")
-                break
-            turn = 20 * err
-            left_cmd = max(70, min(110, self.adjust_speed(base_speed - turn)))
-            right_cmd = max(70, min(110, self.adjust_speed(base_speed + turn)))
-            self.iface.write_command(left_cmd, right_cmd)
-            self.iface.log_error(0.0, err)
-            time.sleep(0.05)
+        # print(f"All targets reached. Adjusting final orientation to {targets[-1][2]:.2f} radians.")
+        # final_th = targets[-1][2]
+        # while True:
+        #     _, _, theta = self.iface.read_pos()
+        #     err = self.normalize(final_th - theta)
+        #     if abs(err) < self.ang_tolerance:
+        #         print(f"Final orientation aligned: {theta:.2f} rad.")
+        #         break
+        #     turn = 20 * err
+        #     left_cmd = max(70, min(110, self.adjust_speed(base_speed - turn)))
+        #     right_cmd = max(70, min(110, self.adjust_speed(base_speed + turn)))
+        #     self.iface.write_command(left_cmd, right_cmd)
+        #     self.iface.log_error(0.0, err)
+        #     time.sleep(0.05)
 
         self.iface.write_command(90, 90)
         print("Robot navigation completed.")
@@ -277,8 +292,8 @@ class PIDController:
 
 def run_controller(
     target_file, pose_file, command_file, error_file,
-    Kp_dist=0.2, Kp_ang=4.0, Ki_ang=0.07, Kd_ang=0.7,
-    dist_tolerance=15, ang_tolerance=0.1
+    Kp_dist=0.3, Kp_ang=5.0, Ki_ang=2,Kd_ang=-100, #0.7, #0.7, #0.7, # 0.07 
+    dist_tolerance=15, ang_tolerance=20, final_distance_tol=10
 ):
     """
     Convenience function to run the PID controller using text file paths.
@@ -289,14 +304,14 @@ def run_controller(
         Kp_dist=Kp_dist, Kp_ang=Kp_ang,
         Ki_ang=Ki_ang, Kd_ang=Kd_ang,
         dist_tolerance=dist_tolerance,
-        ang_tolerance=ang_tolerance
+        ang_tolerance=ang_tolerance,final_distance_tol=final_distance_tol
     )
     controller.run()
 
 
 def exec_bot():
     target_file  = str(Path("Targets") / "path.txt")
-    pose_file    = str(Path("Data") / "pose.txt")
+    pose_file    = str(Path("Data") / "robot_pos.txt")
     command_file = str(Path("Data") / "command.txt")
     error_file   = str(Path("Data") / "error.txt")
 
