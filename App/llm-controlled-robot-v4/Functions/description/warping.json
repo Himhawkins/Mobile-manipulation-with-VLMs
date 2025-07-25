@@ -1,0 +1,62 @@
+[
+  {
+    "name": "warp_points",
+    "description": "Transform a list of (x, y) points from original image space into warped arena space, using arena calibration and settings.\n\nOutput: A list of (x, y) points in the rectified warped coordinate system.\n\nExample: `warp_points(points=[[320, 240], [400, 300]])`",
+    "parameters": {
+      "type": "OBJECT",
+      "properties": {
+        "points": {
+          "type": "ARRAY",
+          "description": "List of [x, y] coordinates to transform into warped space.",
+          "items": {
+            "type": "ARRAY",
+            "items": {
+              "type": "NUMBER"
+            }
+          }
+        },
+        "data_folder": {
+          "type": "STRING",
+          "description": "Path to the folder containing `arena_corners.txt`. Defaults to 'Data'."
+        },
+        "settings_path": {
+          "type": "STRING",
+          "description": "Path to the JSON file with arena warp dimensions. Defaults to 'Settings/settings.json'."
+        }
+      },
+      "required": [
+        "points"
+      ]
+    }
+  },
+  {
+    "name": "unwarp_points",
+    "description": "Transform a list of (x, y) points from warped arena space back to original image space, using arena calibration and settings.\n\nOutput: A list of (x, y) points mapped to original image coordinates.\n\nExample: `unwarp_points(points=[[100, 100], [200, 200]])`",
+    "parameters": {
+      "type": "OBJECT",
+      "properties": {
+        "points": {
+          "type": "ARRAY",
+          "description": "List of [x, y] coordinates in warped space to transform back to original arena space.",
+          "items": {
+            "type": "ARRAY",
+            "items": {
+              "type": "NUMBER"
+            }
+          }
+        },
+        "data_folder": {
+          "type": "STRING",
+          "description": "Path to the folder containing `arena_corners.txt`. Defaults to 'Data'."
+        },
+        "settings_path": {
+          "type": "STRING",
+          "description": "Path to the JSON file with arena warp dimensions. Defaults to 'Settings/settings.json'."
+        }
+      },
+      "required": [
+        "points"
+      ]
+    }
+  }
+]
