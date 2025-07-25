@@ -107,9 +107,17 @@ class DashboardApp(ctk.CTk):
         self.calibrate_btn.grid(row=0, column=1, padx=5)
         self.run_btn = ctk.CTkButton(action_frame, text="Run", command=lambda m="Run": self.on_mode_action(m))
         self.run_btn.grid(row=0, column=2, padx=5)
-        self.execute_btn = ctk.CTkButton(action_frame, text="Execute", command=lambda m="Execute": self.on_mode_action(m))
+
+        self.is_executing = False
+        self.execute_btn = ctk.CTkButton(
+            action_frame,
+            text="Execute",
+            fg_color= "#7228E9",  # purpil
+            command=self.toggle_execute
+        )
         self.execute_btn.grid(row=0, column=3, padx=5)
 
+        self.move_thread = None
         self.stop_event = threading.Event()
 
     def on_camera_change(self, value):
@@ -197,6 +205,44 @@ class DashboardApp(ctk.CTk):
     def on_mode_change(self, value):
         if value == "Create New":
             self.on_edit()
+    
+    def toggle_execute(self):
+        if not self.is_executing:
+            # --- START EXECUTION ---
+            port = self.serial_var.get().strip()
+            if not port:
+                CTkMessageBox(self, "Error", "Please select a serial port before executing.", "red")
+                return
+
+            self.is_executing = True
+            self.stop_event.clear()
+
+            # Update button to “Stop” and turn red
+            self.execute_btn.configure(text="Stop", fg_color="#FF3B30")
+
+            # Start the robot-moving thread
+            self.move_thread = threading.Thread(
+                target=move_robot_with_thread,
+                kwargs={
+                    "serial_port": port,
+                    "baud_rate": 115200,
+                    "command_file": "Data/command.txt",
+                    "stop_event": self.stop_event,
+                    "send_interval_s": 0.1
+                },
+                daemon=True
+            )
+            self.move_thread.start()
+        else:
+            # --- STOP EXECUTION ---
+            self.is_executing = False
+            self.stop_event.set()
+
+            # Reset button to “Execute” and blue
+            self.execute_btn.configure(text="Execute", fg_color="#7228E9")
+
+            # Optionally join() here or simply let the thread exit itself
+
 
     def on_mode_action(self, action):
         if action == "Calibrate":
