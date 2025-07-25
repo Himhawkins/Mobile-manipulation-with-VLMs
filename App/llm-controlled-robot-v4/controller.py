@@ -294,30 +294,6 @@ def run_controller(
     controller.run()
 
 
-if __name__ == "__main__":
-    # Define file paths using Path for cross-platform compatibility
-    target_file  = str(Path("targets") / "pattern_llm" / "targets.txt")
-    pose_file    = str(Path("controls") / "pose.txt")
-    command_file = str(Path("controls") / "command.txt")
-    error_file   = str(Path("controls") / "error.txt")
-
-    print("Starting demo run of PID controller…")
-    try:
-        run_controller(
-            target_file,
-            pose_file,
-            command_file,
-            error_file
-        )
-    except Exception as e:
-        print(f"An error occurred during the controller run: {e}")
-    finally:
-        print(f"Demo run completed. Files used:\n"
-              f"  Targets:  {target_file}\n"
-              f"  Pose:     {pose_file}\n"
-              f"  Command:  {command_file}\n"
-              f"  Error:    {error_file}")
-
 def exec_bot():
     target_file  = str(Path("Targets") / "path.txt")
     pose_file    = str(Path("Data") / "pose.txt")
@@ -340,3 +316,30 @@ def exec_bot():
               f"  Pose:     {pose_file}\n"
               f"  Command:  {command_file}\n"
               f"  Error:    {error_file}")
+
+
+if __name__ == "__main__":
+    exec_bot()
+    # Define file paths using Path for cross-platform compatibility
+    # target_file  = str(Path("targets") / "pattern_llm" / "targets.txt")
+    # pose_file    = str(Path("controls") / "pose.txt")
+    # command_file = str(Path("controls") / "command.txt")
+    # error_file   = str(Path("controls") / "error.txt")
+
+    # print("Starting demo run of PID controller…")
+    # try:
+    #     run_controller(
+    #         target_file,
+    #         pose_file,
+    #         command_file,
+    #         error_file
+    #     )
+    # except Exception as e:
+    #     print(f"An error occurred during the controller run: {e}")
+    # finally:
+    #     print(f"Demo run completed. Files used:\n"
+    #           f"  Targets:  {target_file}\n"
+    #           f"  Pose:     {pose_file}\n"
+    #           f"  Command:  {command_file}\n"
+    #           f"  Error:    {error_file}")
+
