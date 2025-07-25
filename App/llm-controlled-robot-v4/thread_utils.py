@@ -29,19 +29,11 @@ def run_in_thread(callback, on_start=None, on_complete=None):
     thread = threading.Thread(target=wrapper)
     thread.start()
 
-def disable_button(app, btn_name):
-    for child in app.children.values():
-        if isinstance(child, ctk.CTkFrame):
-            for btn in child.winfo_children():
-                if isinstance(btn, ctk.CTkButton) and btn.cget("text") == btn_name:
-                    btn.configure(state="disabled")
+def disable_button(btn_name):
+    btn_name.configure(state="disabled")
 
-def enable_button(app, btn_name):
-    for child in app.children.values():
-        if isinstance(child, ctk.CTkFrame):
-            for btn in child.winfo_children():
-                if isinstance(btn, ctk.CTkButton) and btn.cget("text") == btn_name:
-                    btn.configure(state="normal")
+def enable_button(btn_name):
+    btn_name.configure(state="normal")
     
 def callibrate_task(app):
     app.settings = get_app_settings()
@@ -53,14 +45,22 @@ def callibrate_task(app):
         app.after(0, lambda: CTkMessageBox(app, "Status", "Calibrated successfully", "white"))
     except ValueError as e:
         app.after(0, lambda e=e: CTkMessageBox(app, "Detection Error", str(e), "yellow"))
+        return False
     except Exception as e:
         app.after(0, lambda e=e: CTkMessageBox(app, "Error", str(e), "red"))
+        return False
 
     try:
         detect_and_get_bbox(img_path="Data/frame_img.png", prompt=obstacle_prompt, save_path="Data/obstacles.txt")
     except Exception as e:
         app.after(0, lambda e=e: CTkMessageBox(app, "Error", str(e), "red"))
+        return False
+    
+    return True
 
-def run_task(text_box, user_prompt, agent_name):
-    text_out = call_gemini_agent(user_prompt, agent_name)
-    text_box.after(0, lambda: set_preview_text(text_box=text_box, text=text_out))
+def run_task(app, text_box, user_prompt, agent_name):
+    if (callibrate_task(app) == True):
+        text_out = call_gemini_agent(user_prompt, agent_name)
+        text_box.after(0, lambda: set_preview_text(text_box=text_box, text=text_out))
+    else:
+        return

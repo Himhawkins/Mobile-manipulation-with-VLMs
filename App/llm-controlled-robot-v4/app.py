@@ -100,8 +100,15 @@ class DashboardApp(ctk.CTk):
         self.input_var = ctk.StringVar()
         self.input_entry = ctk.CTkEntry(action_frame, textvariable=self.input_var, placeholder_text="Enter value...", width=250)
         self.input_entry.grid(row=0, column=0, sticky="ew", padx=(0,5))
-        for idx, name in enumerate(["Calibrate", "Run", "Execute"], start=1):
-            ctk.CTkButton(action_frame, text=name, command=lambda m=name: self.on_mode_action(m)).grid(row=0, column=idx, padx=5)
+        # for idx, name in enumerate(["Calibrate", "Run", "Execute"], start=1):
+        #     ctk.CTkButton(action_frame, text=name, command=lambda m=name: self.on_mode_action(m)).grid(row=0, column=idx, padx=5)
+        self.calibrate_btn = ctk.CTkButton(action_frame, text="Calibrate", command=lambda m="Calibrate": self.on_mode_action(m))
+        self.calibrate_btn.grid(row=0, column=1, padx=5)
+        self.run_btn = ctk.CTkButton(action_frame, text="Run", command=lambda m="Run": self.on_mode_action(m))
+        self.run_btn.grid(row=0, column=2, padx=5)
+        self.execute_btn = ctk.CTkButton(action_frame, text="Execute", command=lambda m="Execute": self.on_mode_action(m))
+        self.execute_btn.grid(row=0, column=3, padx=5)
+
 
     def on_camera_change(self, value):
         m = re.search(r"\d+", value)
@@ -193,22 +200,22 @@ class DashboardApp(ctk.CTk):
         if action == "Calibrate":
             run_in_thread(
             callback=lambda: callibrate_task(self),
-            on_start=lambda: disable_button(self, "Calibrate"),
-            on_complete=lambda: enable_button(self, "Calibrate")
+            on_start=lambda: disable_button(self.calibrate_btn),
+            on_complete=lambda: enable_button(self.calibrate_btn)
             )
         elif action == "Run":
             # print(str(self.mode_var.get()))
             run_in_thread(
-            callback=lambda: run_task(self.preview1_txt, str(self.input_var.get()), str(self.mode_var.get())),
-            on_start=lambda: disable_button(self, "Run"),
-            on_complete=lambda: enable_button(self, "Run")
+            callback=lambda: run_task(self, self.preview1_txt, str(self.input_var.get()), str(self.mode_var.get())),
+            on_start=lambda: disable_button(self.run_btn),
+            on_complete=lambda: enable_button(self.run_btn)
             )
         elif action == "Execute":
             #show_frame_with_overlay(self, self.current_frame)
             run_in_thread(
             callback=lambda: exec_bot(),
-            on_start=lambda: disable_button(self, "Execute"),
-            on_complete=lambda: enable_button(self, "Execute")
+            on_start=lambda: disable_button(self.execute_btn),
+            on_complete=lambda: enable_button(self.execute_btn)
             )
             # run_in_thread(
             # callback=lambda: move_bot(self)
