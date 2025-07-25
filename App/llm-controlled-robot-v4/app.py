@@ -4,6 +4,7 @@ import json
 import cv2
 from PIL import Image, ImageTk
 import customtkinter as ctk
+import threading
 
 # Import from new helper modules
 from ui_utils import CTkMessageBox, CheckGroup, get_app_settings, open_settings_popup
@@ -14,6 +15,7 @@ from detection import detect_robot_pose
 from thread_utils import run_in_thread, disable_button, enable_button, callibrate_task, run_task
 from ui_utils import overlay_arena_and_obstacles, get_overlay_frame, draw_path_on_frame
 from controller import exec_bot
+from motion import move_robot_with_thread
 
 class DashboardApp(ctk.CTk):
     def __init__(self):
@@ -79,7 +81,6 @@ class DashboardApp(ctk.CTk):
         self.preview2_img_label = ctk.CTkLabel(self.preview2, text="")  # no text, will hold image
         self.preview2_img_label.pack(expand=True, fill="both")
 
-
         # Bottom Section
         bottom_frame = ctk.CTkFrame(self)
         bottom_frame.grid(row=2, column=0, sticky="nsew", padx=10, pady=(5,10))
@@ -109,6 +110,7 @@ class DashboardApp(ctk.CTk):
         self.execute_btn = ctk.CTkButton(action_frame, text="Execute", command=lambda m="Execute": self.on_mode_action(m))
         self.execute_btn.grid(row=0, column=3, padx=5)
 
+        self.stop_event = threading.Event()
 
     def on_camera_change(self, value):
         m = re.search(r"\d+", value)
@@ -212,14 +214,25 @@ class DashboardApp(ctk.CTk):
             )
         elif action == "Execute":
             #show_frame_with_overlay(self, self.current_frame)
+
+            def stop_bot(self):
+                enable_button(self.execute_btn)
+                self.stop_event.set()
+
             run_in_thread(
             callback=lambda: exec_bot(),
             on_start=lambda: disable_button(self.execute_btn),
-            on_complete=lambda: enable_button(self.execute_btn)
+            on_complete=lambda: stop_bot(self)
             )
-            # run_in_thread(
-            # callback=lambda: move_bot(self)
-            # )
+
+            self.stop_event.clear()
+            run_in_thread(
+            callback=lambda: move_robot_with_thread(serial_port=self.serial_var.get(),
+                                                    baud_rate=115200,
+                                                    command_file="Data/command.txt",
+                                                    send_interval_s=0.1,
+                                                    stop_event=self.stop_event)
+            )
 
     def on_edit(self):
         if getattr(self, "edit_popup", None) is not None and self.edit_popup.winfo_exists():

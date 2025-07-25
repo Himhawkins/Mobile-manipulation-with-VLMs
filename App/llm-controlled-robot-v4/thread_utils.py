@@ -59,8 +59,10 @@ def callibrate_task(app):
     return True
 
 def run_task(app, text_box, user_prompt, agent_name):
-    if (callibrate_task(app) == True):
-        text_out = call_gemini_agent(user_prompt, agent_name)
-        text_box.after(0, lambda: set_preview_text(text_box=text_box, text=text_out))
-    else:
-        return
+    # if (callibrate_task(app) == True):
+    #     text_out = call_gemini_agent(user_prompt, agent_name)
+    #     text_box.after(0, lambda: set_preview_text(text_box=text_box, text=text_out))
+    # else:
+    #     return
+    text_out = call_gemini_agent(user_prompt, agent_name)
+    text_box.after(0, lambda: set_preview_text(text_box=text_box, text=text_out))
