@@ -1,5 +1,9 @@
 [
     {
+        "library": "planning",
+        "name": "trace_targets"
+    },
+    {
         "library": "soft_dev",
         "name": "create_code"
     }

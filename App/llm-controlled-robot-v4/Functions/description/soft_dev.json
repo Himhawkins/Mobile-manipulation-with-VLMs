@@ -1,4 +1,5 @@
- {
+ [
+   {
     "name": "create_code",
     "description": "Writes a string of Python code to a specified file.\n\nOutput: Returns a status string, such as 'success' or 'failure'.\n\nExample: `create_code(code='print(\"hello world\")', output_file='output.py')`",
     "parameters": {
@@ -19,3 +20,4 @@
      ]
     }
    }
+]
