@@ -225,8 +225,10 @@ def get_overlay_frame(
     """
     overlay = cv2.imread(img_path)
     if overlay is None:
-        print("[get_overlay_frame] Could not read image:", img_path)
-        return None
+        print(f"[get_overlay_frame] Warning: Could not read image from '{img_path}'")
+        # Create a blank fallback image
+        w, h = warp_size
+        overlay = np.zeros((h, w, 3), dtype=np.uint8)
 
     def sort_corners(pts):
         """Sorts 4 corner points: [TL, TR, BR, BL]"""
