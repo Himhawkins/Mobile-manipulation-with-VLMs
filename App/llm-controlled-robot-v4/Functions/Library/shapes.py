@@ -4,9 +4,9 @@ from typing import List, Tuple
 
 def generate_circle_pattern(
     radius: float,
-    num_points: int = 50,
+    num_points: float = 20,
     center: Tuple[float, float] = None,
-    grid_size: Tuple[int, int] = None
+    grid_size: Tuple[int, int] = (1200,900)
 ) -> List[Tuple[float, float, float]]:
     """
     Generate points for a circle of given radius and number of points.
@@ -22,7 +22,7 @@ def generate_circle_pattern(
     else:
         cx, cy = center
     points: List[Tuple[float, float, float]] = []
-    for i in range(num_points):
+    for i in range(int(num_points)):
         theta = 2 * math.pi * i / num_points
         x = cx + radius * math.cos(theta)
         y = cy + radius * math.sin(theta)
@@ -34,7 +34,7 @@ def generate_rectangle_pattern(
     width_rect: float,
     height_rect: float,
     num_points_per_side: int = 10,
-    grid_size: Tuple[int, int] = None
+    grid_size: Tuple[int, int] = (1200,900)
 ) -> List[Tuple[float, float, float]]:
     """
     Generate points along the perimeter of a rectangle.
@@ -66,7 +66,7 @@ def generate_trapezium_pattern(
     bottom_width: float,
     height: float,
     num_points_per_side: int = 10,
-    grid_size: Tuple[int, int] = None
+    grid_size: Tuple[int, int] = (1200,900)
 ) -> List[Tuple[float, float, float]]:
     """
     Generate points around a symmetric trapezium.
@@ -98,7 +98,7 @@ def generate_parallelogram_pattern(
     height_para: float,
     angle: float = math.pi / 6,
     num_points_per_side: int = 10,
-    grid_size: Tuple[int, int] = None
+    grid_size: Tuple[int, int] = (1200,900)
 ) -> List[Tuple[float, float, float]]:
     """
     Generate points around a parallelogram.
@@ -128,7 +128,7 @@ def generate_diamond_pattern(
     width: float,
     height: float,
     num_points_per_side: int = 10,
-    grid_size: Tuple[int, int] = None
+    grid_size: Tuple[int, int] = (1200,900)
 ) -> List[Tuple[float, float, float]]:
     """
     Generate points around a diamond (rotated square).
@@ -157,7 +157,7 @@ def generate_lawnmower_pattern(
     width_area: float,
     height_area: float,
     spacing: float = 10.0,
-    grid_size: Tuple[int, int] = None
+    grid_size: Tuple[int, int] = (1200,900)
 ) -> List[Tuple[float, float, float]]:
     """
     Generate a back-and-forth lawnmower coverage pattern.
@@ -188,7 +188,7 @@ def generate_zigzag_pattern(
     width_area: float,
     height_area: float,
     num_zigs: int = 10,
-    grid_size: Tuple[int, int] = None
+    grid_size: Tuple[int, int] = (1200,900)
 ) -> List[Tuple[float, float, float]]:
     """
     Generate a zigzag line across a bounding box.
@@ -213,7 +213,7 @@ def generate_spiral_pattern(
     turns: float = 3.0,
     max_radius: float = 100.0,
     num_points: int = 200,
-    grid_size: Tuple[int, int] = None
+    grid_size: Tuple[int, int] = (1200,900)
 ) -> List[Tuple[float, float, float]]:
     """
     Generate an Archimedean spiral.
@@ -239,7 +239,7 @@ def generate_ellipse_pattern(
     major_axis: float,
     minor_axis: float,
     num_points: int = 50,
-    grid_size: Tuple[int, int] = None
+    grid_size: Tuple[int, int] = (1200,900)
 ) -> List[Tuple[float, float, float]]:
     """
     Generate points for an ellipse.
@@ -259,3 +259,7 @@ def generate_ellipse_pattern(
         dy = minor_axis * math.cos(theta)
         points.append((x, y))
     return points
+
+
+c={'center': [321.0, 211.0], 'num_points': 60.0, 'radius': 2.0}
+print(generate_circle_pattern(**c))

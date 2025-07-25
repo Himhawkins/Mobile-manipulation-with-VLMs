@@ -29,8 +29,7 @@
       }
      },
      "required": [
-      "radius",
-      "num_points"
+      "radius"
      ]
     }
    },

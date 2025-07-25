@@ -294,8 +294,8 @@ class PIDController:
 
 def run_controller(
     target_file, pose_file, command_file, error_file,
-    Kp_dist=0.2, Kp_ang=4.0, Ki_ang=0.2,Kd_ang=-0.001, #0.7, #0.7, #0.7, # 0.07 
-    dist_tolerance=15, ang_tolerance=15, final_distance_tol=10
+    Kp_dist=0.2, Kp_ang=4.0, Ki_ang=0.11,Kd_ang=-0.001, #0.7, #0.7, #0.7, # 0.07 
+    dist_tolerance=15, ang_tolerance=12, final_distance_tol=10
 ):
     """
     Convenience function to run the PID controller using text file paths.
