@@ -144,7 +144,7 @@ class DashboardApp(ctk.CTk):
             cx, cy, theta, pts = pose
             d_frame = draw_robot_pose(self.current_frame, cx, cy, theta, pts)
             arena_obs_frame = overlay_arena_and_obstacles(frame=d_frame, arena_path="Data/arena_corners.txt", obstacles_path="Data/obstacles.txt")
-            draw_frame = draw_path_on_frame(draw_frame, path_file="Targets/path.txt")
+            arena_obs_frame = draw_path_on_frame(arena_obs_frame, path_file="Targets/path.txt")
             draw_frame = arena_obs_frame
         else:
             draw_frame = self.current_frame

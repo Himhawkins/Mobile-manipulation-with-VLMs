@@ -216,7 +216,7 @@ class PIDController:
             tx, ty = targets[idx]
             dist_err = math.hypot(tx - x, ty - y)
             heading = math.atan2(ty - y, tx - x)
-            print("EXECUTING:::",tx, " ",ty)
+            #print("EXECUTING:::",tx, " ",ty)
          
             if dist_err < self.dist_tolerance:
                 if idx+1==total:
@@ -250,6 +250,7 @@ class PIDController:
             #     deriv_ang=0
             # else:
             deriv_ang = (ang_err - self.prev_ang_err) / dt
+            
             self.prev_ang_err = ang_err
 
             ang_ctrl = (
@@ -262,10 +263,11 @@ class PIDController:
 
             left = base_speed + (move_flag * dir_mult * lin_ctrl) - ang_ctrl
             right = base_speed + (move_flag * dir_mult * lin_ctrl) + ang_ctrl
-
+            if self.Kd_ang * deriv_ang !=0:
+                print(self.Kd_ang * deriv_ang)
             left = max(70, min(110, self.adjust_speed(left)))
             right = max(70, min(110, self.adjust_speed(right)))
-            print("EXECUTING:::",tx, " ",ty, " COMMAND SENT: ",left," ,",right)
+            #print("EXECUTING:::",tx, " ",ty, " COMMAND SENT: ",left," ,",right ,"P :",self.Kp_ang * ang_err , " D: ",(ang_err - self.prev_ang_err)  , " I: ", self.Ki_ang * self.integral_ang )
             self.iface.write_command(left, right)
             self.iface.log_error(dist_err, ang_err)
             #time.sleep(0.01)
@@ -292,8 +294,8 @@ class PIDController:
 
 def run_controller(
     target_file, pose_file, command_file, error_file,
-    Kp_dist=0.3, Kp_ang=5.0, Ki_ang=2,Kd_ang=-100, #0.7, #0.7, #0.7, # 0.07 
-    dist_tolerance=15, ang_tolerance=20, final_distance_tol=10
+    Kp_dist=0.2, Kp_ang=4.0, Ki_ang=0.2,Kd_ang=-0.001, #0.7, #0.7, #0.7, # 0.07 
+    dist_tolerance=15, ang_tolerance=15, final_distance_tol=10
 ):
     """
     Convenience function to run the PID controller using text file paths.

@@ -102,12 +102,19 @@ if __name__ == "__main__":
     DATA_FOLDER  = "Data"
     SPACING      = 20
     # example list of targets instead of a file
-    input_list = [[205.0, 97.0], [383.0, 31.0]]#[[150,50], [200,80], [350,300]]
+    input_list = [[458.0, 325.0], [449.0, 204.0]]#[[150,50], [200,80], [350,300]]
 
-    trace_targets(
-        input_target_list=input_list,
-        output_target_path="Targets/improved_targets.txt",
-        data_folder=DATA_FOLDER,
-        spacing=SPACING,
-        out_path="Data/trace_overlay.png"
-    )
+    # trace_targets(
+    #     input_target_list=input_list,
+    #     output_target_path="Targets/improved_targets.txt",
+    #     data_folder=DATA_FOLDER,
+    #     spacing=SPACING,
+    #     out_path="Data/trace_overlay.png"
+    # )
+
+    gg={'input_target_list': [[458.0, 325.0], [449.0, 204.0]],
+     'output_target_path': 'Targets/path.txt', 
+     'out_path': 'Data/trace_overlay.png', 
+     'data_folder': 'Data', 'spacing': 5.0}
+    trace_targets(**gg)
+    
