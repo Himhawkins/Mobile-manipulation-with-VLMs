@@ -12,7 +12,7 @@ from agent_utils import save_agent_to_disk, get_agent_folders, get_agent_functio
 from port_utils import refresh_cameras, refresh_serial_ports
 from detection import detect_robot_pose
 from thread_utils import run_in_thread, disable_button, enable_button, callibrate_task, run_task
-from ui_utils import overlay_arena_and_obstacles, show_trace_overlay
+from ui_utils import overlay_arena_and_obstacles, get_overlay_frame, draw_path_on_frame
 from controller import exec_bot
 
 class DashboardApp(ctk.CTk):
@@ -137,16 +137,25 @@ class DashboardApp(ctk.CTk):
             cx, cy, theta, pts = pose
             d_frame = draw_robot_pose(self.current_frame, cx, cy, theta, pts)
             arena_obs_frame = overlay_arena_and_obstacles(frame=d_frame, arena_path="Data/arena_corners.txt", obstacles_path="Data/obstacles.txt")
+            draw_frame = draw_path_on_frame(draw_frame, path_file="Targets/path.txt")
             draw_frame = arena_obs_frame
         else:
             draw_frame = self.current_frame
         # arena_obs_frame = overlay_arena_and_obstacles(frame=draw_frame, arena_path="Data/arena_corners.txt", obstacles_path="Data/obstacles.txt")
+        # draw_frame = draw_path_on_frame(draw_frame, path_file="Targets/path.txt")
         img = display_frame(frame=draw_frame, target_w=cw, target_h=ch)
         if img:
             self.video_label.configure(image=img)
             self.video_label.image = img
-        
-        show_trace_overlay(self, self.preview2, self.preview2_img_label)
+
+        width = int(self.settings.get("arena_width", "1200"))
+        height = int(self.settings.get("arena_height", "900"))
+        overlay = get_overlay_frame(warp_size=(width, height))
+        overlay_display = display_frame(overlay, int(width/2), int(height/2))
+
+        if overlay_display:
+            self.preview2_img_label.configure(image=overlay_display)
+            self.preview2_img_label.image = overlay_display
 
         self.after(16, self.on_update_video)
 

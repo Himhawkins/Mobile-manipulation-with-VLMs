@@ -203,55 +203,112 @@ def show_frame_with_overlay(parent, frame, arena_path="Data/arena_corners.txt", 
     popup.focus()
     popup.grab_set()
 
-def show_trace_overlay(app, preview_frame, image_label):
+def get_overlay_frame(
+    warp_size=(640, 640),
+    img_path="Data/frame_img.png",
+    arena_path="Data/arena_corners.txt",
+    obstacles_path="Data/obstacles.txt",
+    path_file="Targets/path.txt"
+):
     """
-    Displays trace_overlay.png fully inside preview_frame,
-    maintaining aspect ratio. No cropping. May add padding to fit.
+    Returns a warped and cropped arena frame with overlaid arena, obstacles, and path.
+
+    Parameters:
+        img_path (str): Path to base frame image.
+        arena_path (str): File containing 4 arena corners (x,y).
+        obstacles_path (str): File containing obstacles (x,y,w,h).
+        path_file (str): File containing path points (x,y).
+        warp_size (tuple): Output image size (width, height) of warped arena.
+
+    Returns:
+        np.ndarray: Warped and annotated frame (BGR image).
     """
-    if not preview_frame or not image_label:
-        return
+    overlay = cv2.imread(img_path)
+    if overlay is None:
+        print("[get_overlay_frame] Could not read image:", img_path)
+        return None
 
-    img_path = "Data/trace_overlay.png"
-    if not os.path.exists(img_path):
-        return
+    def sort_corners(pts):
+        """Sorts 4 corner points: [TL, TR, BR, BL]"""
+        pts = np.array(pts, dtype=np.float32)
+        s = pts.sum(axis=1)
+        d = np.diff(pts, axis=1)
+        return np.array([
+            pts[np.argmin(s)],      # Top-left
+            pts[np.argmin(d)],      # Top-right
+            pts[np.argmax(s)],      # Bottom-right
+            pts[np.argmax(d)]       # Bottom-left
+        ], dtype=np.float32)
 
-    if not hasattr(app, "_trace_overlay"):
-        app._trace_overlay = {
-            "path": img_path,
-            "last_mtime": 0,
-            "ctk_image": None
-        }
+    # Read and draw arena
+    try:
+        with open(arena_path, "r") as f:
+            arena_pts = [list(map(int, line.strip().split(","))) for line in f if line.strip()]
+        if len(arena_pts) == 4:
+            cv2.polylines(overlay, [np.array(arena_pts, dtype=np.int32)], isClosed=True, color=(0, 255, 255), thickness=2)
+            src = sort_corners(arena_pts)
+        else:
+            print("[get_overlay_frame] Arena corners not 4 points.")
+            return overlay
+    except Exception as e:
+        print(f"[get_overlay_frame] Arena read error: {e}")
+        return overlay
 
-    state = app._trace_overlay
+    # Draw obstacles
+    try:
+        with open(obstacles_path, "r") as f:
+            for line in f:
+                parts = line.strip().split(",")
+                if len(parts) == 4:
+                    x, y, w, h = map(int, parts)
+                    cv2.rectangle(overlay, (x, y), (x + w, y + h), (0, 0, 255), -1)
+    except Exception as e:
+        print(f"[get_overlay_frame] Obstacle read error: {e}")
+
+    # Draw path
+    try:
+        if os.path.exists(path_file):
+            with open(path_file, "r") as f:
+                pts = [tuple(map(int, line.strip().split(","))) for line in f if "," in line]
+            for i in range(1, len(pts)):
+                cv2.line(overlay, pts[i - 1], pts[i], (0, 255, 0), 2)
+    except Exception as e:
+        print(f"[get_overlay_frame] Path read error: {e}")
+
+    # Warp to top-down view
+    try:
+        w, h = warp_size
+        dst = np.array([
+            [0, 0],
+            [w - 1, 0],
+            [w - 1, h - 1],
+            [0, h - 1]
+        ], dtype=np.float32)
+
+        M = cv2.getPerspectiveTransform(src, dst)
+        warped = cv2.warpPerspective(overlay, M, (w, h))
+        return warped
+    except Exception as e:
+        print(f"[get_overlay_frame] Warp error: {e}")
+        return overlay
+
+
+def draw_path_on_frame(frame, path_file="path.txt", color=(0, 255, 0), thickness=2):
+    if not os.path.exists(path_file):
+        print(f"[draw_path_on_frame] Path file not found: {path_file}")
+        return frame
 
     try:
-        mtime = os.path.getmtime(img_path)
-        if mtime == state["last_mtime"]:
-            return  # no update needed
+        with open(path_file, "r") as f:
+            pts = [tuple(map(int, line.strip().split(","))) for line in f if "," in line]
 
-        frame_w, frame_h = preview_frame.winfo_width(), preview_frame.winfo_height()
-        if frame_w < 2 or frame_h < 2:
-            app.after(100, lambda: show_trace_overlay(app, preview_frame, image_label))
-            return
+        if len(pts) < 2:
+            return frame  # nothing to draw
 
-        pil_img = Image.open(img_path).convert("RGB")
-        img_w, img_h = pil_img.size
-
-        # Resize with aspect ratio preserved and padding to fit the frame
-        fitted_img = ImageOps.pad(
-            pil_img,
-            (frame_w, frame_h),
-            method=Image.LANCZOS,
-            color=(0, 0, 0),  # padding color (black)
-            centering=(0.5, 0.5)
-        )
-
-        ctk_img = ctk.CTkImage(light_image=fitted_img, size=(frame_w, frame_h))
-        image_label.configure(image=ctk_img, text="")
-        image_label.image = ctk_img
-
-        state["last_mtime"] = mtime
-        state["ctk_image"] = ctk_img
+        for i in range(1, len(pts)):
+            cv2.line(frame, pts[i - 1], pts[i], color, thickness)
 
     except Exception as e:
-        print(f"[show_trace_overlay] Failed to load overlay: {e}")
+        print(f"[draw_path_on_frame] Error: {e}")
+
+    return frame
