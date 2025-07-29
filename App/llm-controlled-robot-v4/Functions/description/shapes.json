@@ -1,310 +1,291 @@
 [
-   {
+  {
     "name": "generate_circle_pattern",
-    "description": "Generate points for a circle of a given radius and number of points. If grid_size is not provided, the center defaults to the grid midpoint.\n\nOutput: A list of (x, y) coordinate points on the circle.\n\nExample: `generate_circle_pattern(radius=100.0, num_points=60)`",
+    "description": "Generate points for a circle of a given radius and number of points. The pattern is centered on the arena midpoint by default.",
     "parameters": {
-     "type": "OBJECT",
-     "properties": {
-      "radius": {
-       "type": "NUMBER",
-       "description": "Radius of the circle."
+      "type": "OBJECT",
+      "properties": {
+        "radius": {
+          "type": "NUMBER",
+          "description": "Radius of the circle."
+        },
+        "num_points": {
+          "type": "INTEGER",
+          "description": "The total number of points to generate on the circle's circumference. Defaults to 20."
+        },
+        "center": {
+          "type": "ARRAY",
+          "description": "Optional [x, y] coordinates for the circle's center. Defaults to the arena midpoint.",
+          "items": {
+            "type": "NUMBER"
+          }
+        }
       },
-      "num_points": {
-       "type": "INTEGER",
-       "description": "The total number of points to generate on the circle's circumference."
-      },
-      "center": {
-       "type": "ARRAY",
-       "description": "Optional [x, y] coordinates for the circle's center. Defaults to the grid midpoint.",
-       "items": {
-        "type": "NUMBER"
-       }
-      },
-      "grid_size": {
-       "type": "ARRAY",
-       "description": "Optional [width, height] of the grid, used if the center is not specified.",
-       "items": {
-        "type": "INTEGER"
-       }
-      }
-     },
-     "required": [
-      "radius"
-     ]
+      "required": [
+        "radius"
+      ]
     }
-   },
-   {
+  },
+  {
     "name": "generate_rectangle_pattern",
-    "description": "Generate points along the perimeter of a rectangle.\n\nOutput: A list of (x, y) coordinate points along the rectangle's edges.\n\nExample: `generate_rectangle_pattern(width_rect=200.0, height_rect=100.0, num_points_per_side=12)`",
+    "description": "Generate points along the perimeter of a rectangle. The pattern is centered on the arena midpoint by default.",
     "parameters": {
-     "type": "OBJECT",
-     "properties": {
-      "width_rect": {
-       "type": "NUMBER",
-       "description": "The total width of the rectangle."
+      "type": "OBJECT",
+      "properties": {
+        "width_rect": {
+          "type": "NUMBER",
+          "description": "The total width of the rectangle."
+        },
+        "height_rect": {
+          "type": "NUMBER",
+          "description": "The total height of the rectangle."
+        },
+        "num_points": {
+          "type": "INTEGER",
+          "description": "The number of points to generate on each side of the rectangle. Defaults to 10."
+        },
+        "center": {
+          "type": "ARRAY",
+          "description": "Optional [x, y] coordinates for the rectangle's center. Defaults to the arena midpoint.",
+          "items": {
+            "type": "NUMBER"
+          }
+        }
       },
-      "height_rect": {
-       "type": "NUMBER",
-       "description": "The total height of the rectangle."
-      },
-      "num_points_per_side": {
-       "type": "INTEGER",
-       "description": "The number of points to generate on each side of the rectangle."
-      },
-      "grid_size": {
-       "type": "ARRAY",
-       "description": "Optional [width, height] of the grid.",
-       "items": {
-        "type": "INTEGER"
-       }
-      }
-     },
-     "required": [
-      "width_rect",
-      "height_rect",
-      "num_points_per_side"
-     ]
+      "required": [
+        "width_rect",
+        "height_rect"
+      ]
     }
-   },
-   {
+  },
+  {
     "name": "generate_trapezium_pattern",
-    "description": "Generate points around a symmetric trapezium.\n\nOutput: A list of (x, y) coordinate points around the trapezium's edges.\n\nExample: `generate_trapezium_pattern(top_width=80.0, bottom_width=120.0, height=50.0, num_points_per_side=10)`",
+    "description": "Generate points around a symmetric trapezium. The pattern is centered on the arena midpoint by default.",
     "parameters": {
-     "type": "OBJECT",
-     "properties": {
-      "top_width": {
-       "type": "NUMBER",
-       "description": "The width of the top base of the trapezium."
+      "type": "OBJECT",
+      "properties": {
+        "top_width": {
+          "type": "NUMBER",
+          "description": "The width of the top base of the trapezium."
+        },
+        "bottom_width": {
+          "type": "NUMBER",
+          "description": "The width of the bottom base of the trapezium."
+        },
+        "height": {
+          "type": "NUMBER",
+          "description": "The height of the trapezium."
+        },
+        "num_points": {
+          "type": "INTEGER",
+          "description": "The number of points to generate on each of the four sides. Defaults to 10."
+        },
+        "center": {
+          "type": "ARRAY",
+          "description": "Optional [x, y] coordinates for the trapezium's center. Defaults to the arena midpoint.",
+          "items": {
+            "type": "NUMBER"
+          }
+        }
       },
-      "bottom_width": {
-       "type": "NUMBER",
-       "description": "The width of the bottom base of the trapezium."
-      },
-      "height": {
-       "type": "NUMBER",
-       "description": "The height of the trapezium."
-      },
-      "num_points_per_side": {
-       "type": "INTEGER",
-       "description": "The number of points to generate on each of the four sides."
-      },
-      "grid_size": {
-       "type": "ARRAY",
-       "description": "Optional [width, height] of the grid.",
-       "items": {
-        "type": "INTEGER"
-       }
-      }
-     },
-     "required": [
-      "top_width",
-      "bottom_width",
-      "height",
-      "num_points_per_side"
-     ]
+      "required": [
+        "top_width",
+        "bottom_width",
+        "height"
+      ]
     }
-   },
-   {
+  },
+  {
     "name": "generate_parallelogram_pattern",
-    "description": "Generate points around a parallelogram.\n\nOutput: A list of (x, y) coordinate points around the parallelogram's edges.\n\nExample: `generate_parallelogram_pattern(width_para=150.0, height_para=75.0, angle=0.52, num_points_per_side=15)`",
+    "description": "Generate points around a parallelogram. The pattern is centered on the arena midpoint by default.",
     "parameters": {
-     "type": "OBJECT",
-     "properties": {
-      "width_para": {
-       "type": "NUMBER",
-       "description": "The length of the base of the parallelogram."
+      "type": "OBJECT",
+      "properties": {
+        "width_para": {
+          "type": "NUMBER",
+          "description": "The length of the base of the parallelogram."
+        },
+        "height_para": {
+          "type": "NUMBER",
+          "description": "The height of the parallelogram."
+        },
+        "angle": {
+          "type": "NUMBER",
+          "description": "The shear angle in radians. Defaults to pi/6."
+        },
+        "num_points": {
+          "type": "INTEGER",
+          "description": "The number of points to generate on each side. Defaults to 10."
+        },
+        "center": {
+          "type": "ARRAY",
+          "description": "Optional [x, y] coordinates for the parallelogram's center. Defaults to the arena midpoint.",
+          "items": {
+            "type": "NUMBER"
+          }
+        }
       },
-      "height_para": {
-       "type": "NUMBER",
-       "description": "The height of the parallelogram."
-      },
-      "angle": {
-       "type": "NUMBER",
-       "description": "The shear angle in radians."
-      },
-      "num_points_per_side": {
-       "type": "INTEGER",
-       "description": "The number of points to generate on each side."
-      },
-      "grid_size": {
-       "type": "ARRAY",
-       "description": "Optional [width, height] of the grid.",
-       "items": {
-        "type": "INTEGER"
-       }
-      }
-     },
-     "required": [
-      "width_para",
-      "height_para",
-      "angle",
-      "num_points_per_side"
-     ]
+      "required": [
+        "width_para",
+        "height_para"
+      ]
     }
-   },
-   {
+  },
+  {
     "name": "generate_diamond_pattern",
-    "description": "Generate points around a diamond (rhombus).\n\nOutput: A list of (x, y) coordinate points around the diamond's edges.\n\nExample: `generate_diamond_pattern(width=100.0, height=100.0, num_points_per_side=10)`",
+    "description": "Generate points around a diamond (rhombus). The pattern is centered on the arena midpoint by default.",
     "parameters": {
-     "type": "OBJECT",
-     "properties": {
-      "width": {
-       "type": "NUMBER",
-       "description": "The total width of the diamond."
+      "type": "OBJECT",
+      "properties": {
+        "width": {
+          "type": "NUMBER",
+          "description": "The total width of the diamond."
+        },
+        "height": {
+          "type": "NUMBER",
+          "description": "The total height of the diamond."
+        },
+        "num_points": {
+          "type": "INTEGER",
+          "description": "The number of points to generate on each of the four sides. Defaults to 10."
+        },
+        "center": {
+          "type": "ARRAY",
+          "description": "Optional [x, y] coordinates for the diamond's center. Defaults to the arena midpoint.",
+          "items": {
+            "type": "NUMBER"
+          }
+        }
       },
-      "height": {
-       "type": "NUMBER",
-       "description": "The total height of the diamond."
-      },
-      "num_points_per_side": {
-       "type": "INTEGER",
-       "description": "The number of points to generate on each of the four sides."
-      },
-      "grid_size": {
-       "type": "ARRAY",
-       "description": "Optional [width, height] of the grid.",
-       "items": {
-        "type": "INTEGER"
-       }
-      }
-     },
-     "required": [
-      "width",
-      "height",
-      "num_points_per_side"
-     ]
+      "required": [
+        "width",
+        "height"
+      ]
     }
-   },
-   {
+  },
+  {
     "name": "generate_lawnmower_pattern",
-    "description": "Generate a back-and-forth lawnmower coverage pattern within a rectangular area.\n\nOutput: A list of (x, y, heading) tuples for the path.\n\nExample: `generate_lawnmower_pattern(width_area=300.0, height_area=200.0, spacing=20.0)`",
+    "description": "Generate a back-and-forth lawnmower coverage pattern. The pattern is centered on the arena midpoint by default.",
     "parameters": {
-     "type": "OBJECT",
-     "properties": {
-      "width_area": {
-       "type": "NUMBER",
-       "description": "The width of the area to cover."
+      "type": "OBJECT",
+      "properties": {
+        "width_area": {
+          "type": "NUMBER",
+          "description": "The width of the area to cover."
+        },
+        "height_area": {
+          "type": "NUMBER",
+          "description": "The height of the area to cover."
+        },
+        "spacing": {
+          "type": "NUMBER",
+          "description": "The spacing between each parallel pass. Defaults to 10.0."
+        },
+        "center": {
+          "type": "ARRAY",
+          "description": "Optional [x, y] coordinates for the center of the area. Defaults to the arena midpoint.",
+          "items": {
+            "type": "NUMBER"
+          }
+        }
       },
-      "height_area": {
-       "type": "NUMBER",
-       "description": "The height of the area to cover."
-      },
-      "spacing": {
-       "type": "NUMBER",
-       "description": "The spacing between each parallel pass."
-      },
-      "grid_size": {
-       "type": "ARRAY",
-       "description": "Optional [width, height] of the grid.",
-       "items": {
-        "type": "INTEGER"
-       }
-      }
-     },
-     "required": [
-      "width_area",
-      "height_area",
-      "spacing"
-     ]
+      "required": [
+        "width_area",
+        "height_area"
+      ]
     }
-   },
-   {
+  },
+  {
     "name": "generate_zigzag_pattern",
-    "description": "Generate a zigzag line pattern within a bounding box.\n\nOutput: A list of (x, y) coordinate points in zigzag order.\n\nExample: `generate_zigzag_pattern(width_area=250.0, height_area=150.0, num_zigs=8)`",
+    "description": "Generate a zigzag line pattern within a bounding box. The pattern is centered on the arena midpoint by default.",
     "parameters": {
-     "type": "OBJECT",
-     "properties": {
-      "width_area": {
-       "type": "NUMBER",
-       "description": "The width of the bounding box for the pattern."
+      "type": "OBJECT",
+      "properties": {
+        "width_area": {
+          "type": "NUMBER",
+          "description": "The width of the bounding box for the pattern."
+        },
+        "height_area": {
+          "type": "NUMBER",
+          "description": "The height of the bounding box for the pattern."
+        },
+        "num_zigs": {
+          "type": "INTEGER",
+          "description": "The number of individual 'zig' segments in the pattern. Defaults to 10."
+        },
+        "center": {
+          "type": "ARRAY",
+          "description": "Optional [x, y] coordinates for the center of the bounding box. Defaults to the arena midpoint.",
+          "items": {
+            "type": "NUMBER"
+          }
+        }
       },
-      "height_area": {
-       "type": "NUMBER",
-       "description": "The height of the bounding box for the pattern."
-      },
-      "num_zigs": {
-       "type": "INTEGER",
-       "description": "The number of individual 'zig' segments in the pattern."
-      },
-      "grid_size": {
-       "type": "ARRAY",
-       "description": "Optional [width, height] of the grid.",
-       "items": {
-        "type": "INTEGER"
-       }
-      }
-     },
-     "required": [
-      "width_area",
-      "height_area",
-      "num_zigs"
-     ]
+      "required": [
+        "width_area",
+        "height_area"
+      ]
     }
-   },
-   {
+  },
+  {
     "name": "generate_spiral_pattern",
-    "description": "Generate an Archimedean spiral pattern.\n\nOutput: A list of (x, y) coordinate points along the spiral.\n\nExample: `generate_spiral_pattern(turns=4.0, max_radius=120.0, num_points=300)`",
+    "description": "Generate an Archimedean spiral pattern. The pattern is centered on the arena midpoint by default.",
     "parameters": {
-     "type": "OBJECT",
-     "properties": {
-      "turns": {
-       "type": "NUMBER",
-       "description": "The total number of full rotations in the spiral."
+      "type": "OBJECT",
+      "properties": {
+        "turns": {
+          "type": "NUMBER",
+          "description": "The total number of full rotations in the spiral. Defaults to 3.0."
+        },
+        "max_radius": {
+          "type": "NUMBER",
+          "description": "The maximum radius the spiral will reach. Defaults to 100.0."
+        },
+        "num_points": {
+          "type": "INTEGER",
+          "description": "The total number of points to generate along the entire spiral path. Defaults to 200."
+        },
+        "center": {
+          "type": "ARRAY",
+          "description": "Optional [x, y] coordinates for the spiral's center. Defaults to the arena midpoint.",
+          "items": {
+            "type": "NUMBER"
+          }
+        }
       },
-      "max_radius": {
-       "type": "NUMBER",
-       "description": "The maximum radius the spiral will reach."
-      },
-      "num_points": {
-       "type": "INTEGER",
-       "description": "The total number of points to generate along the entire spiral path."
-      },
-      "grid_size": {
-       "type": "ARRAY",
-       "description": "Optional [width, height] of the grid.",
-       "items": {
-        "type": "INTEGER"
-       }
-      }
-     },
-     "required": [
-      "turns",
-      "max_radius",
-      "num_points"
-     ]
+      "required": []
     }
-   },
-   {
+  },
+  {
     "name": "generate_ellipse_pattern",
-    "description": "Generate points for an ellipse.\n\nOutput: A list of (x, y) coordinate points around the ellipse.\n\nExample: `generate_ellipse_pattern(major_axis=200.0, minor_axis=100.0, num_points=70)`",
+    "description": "Generate points for an ellipse. The pattern is centered on the arena midpoint by default.",
     "parameters": {
-     "type": "OBJECT",
-     "properties": {
-      "major_axis": {
-       "type": "NUMBER",
-       "description": "The length of the ellipse's major axis."
+      "type": "OBJECT",
+      "properties": {
+        "major_axis": {
+          "type": "NUMBER",
+          "description": "The length of the ellipse's major axis (radius)."
+        },
+        "minor_axis": {
+          "type": "NUMBER",
+          "description": "The length of the ellipse's minor axis (radius)."
+        },
+        "num_points": {
+          "type": "INTEGER",
+          "description": "The number of points to generate around the ellipse. Defaults to 50."
+        },
+        "center": {
+          "type": "ARRAY",
+          "description": "Optional [x, y] coordinates for the ellipse's center. Defaults to the arena midpoint.",
+          "items": {
+            "type": "NUMBER"
+          }
+        }
       },
-      "minor_axis": {
-       "type": "NUMBER",
-       "description": "The length of the ellipse's minor axis."
-      },
-      "num_points": {
-       "type": "INTEGER",
-       "description": "The number of points to generate around the ellipse."
-      },
-      "grid_size": {
-       "type": "ARRAY",
-       "description": "Optional [width, height] of the grid.",
-       "items": {
-        "type": "INTEGER"
-       }
-      }
-     },
-     "required": [
-      "major_axis",
-      "minor_axis",
-      "num_points"
-     ]
+      "required": [
+        "major_axis",
+        "minor_axis"
+      ]
     }
-   }
-  ]
+  }
+]

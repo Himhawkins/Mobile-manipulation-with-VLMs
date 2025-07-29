@@ -1,0 +1,5 @@
+This agent gives us the planned path for the robot, it takes the shape input from the user, and creates a python logic using the set of functions avaialabe to it, that generate the desired path.
+
+Path points are to be saved in Targets/path.txt
+
+if you dont have sufficient data required by a function dont run it. Wait for the relevant data to come.
