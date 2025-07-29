@@ -109,6 +109,7 @@ class DashboardApp(ctk.CTk):
         self.mode_var = ctk.StringVar(value=agent_folders[0] if agent_folders else "")
         self.mode_menu = ctk.CTkOptionMenu(
             bottom_frame,
+            width=200,
             variable=self.mode_var,
             values=agent_folders,
             command=self.on_mode_change
@@ -194,15 +195,15 @@ class DashboardApp(ctk.CTk):
         if pose:
             cx, cy, theta, pts = pose
             d_frame = draw_robot_pose(self.current_frame, cx, cy, theta, pts)
-            overlay = overlay_arena_and_obstacles(
+        else:
+            d_frame = self.current_frame
+        
+        overlay = overlay_arena_and_obstacles(
                 frame=d_frame,
                 arena_path="Data/arena_corners.txt",
                 obstacles_path="Data/obstacles.txt"
             )
-            overlay = draw_path_on_frame(overlay, path_file="Targets/path.txt")
-            draw_frame = overlay
-        else:
-            draw_frame = self.current_frame
+        draw_frame = draw_path_on_frame(overlay, path_file="Targets/path.txt")
 
         img = display_frame(frame=draw_frame, target_w=cw, target_h=ch)
         if img:
@@ -272,7 +273,7 @@ class DashboardApp(ctk.CTk):
 
         self.edit_popup = ctk.CTkToplevel(self)
         self.edit_popup.title(f"Edit Agent: {old_folder}")
-        self.edit_popup.geometry("500x800")
+        self.edit_popup.geometry("500x900")
         self.edit_popup.protocol("WM_DELETE_WINDOW", lambda: self.edit_popup.destroy())
 
         ctk.CTkLabel(self.edit_popup, text="Name:").pack(anchor="w", padx=10, pady=(10,0))
@@ -280,7 +281,7 @@ class DashboardApp(ctk.CTk):
         ctk.CTkEntry(self.edit_popup, textvariable=name_var).pack(fill="x", padx=10, pady=5)
 
         ctk.CTkLabel(self.edit_popup, text="Description:").pack(anchor="w", padx=10, pady=(10,0))
-        desc_box = ctk.CTkTextbox(self.edit_popup, height=100)
+        desc_box = ctk.CTkTextbox(self.edit_popup, height=350)
         desc_box.pack(fill="both", padx=10, pady=5)
         desc_path = os.path.join("Agents", old_folder, "description.txt")
         try:
@@ -290,7 +291,7 @@ class DashboardApp(ctk.CTk):
             pass
 
         ctk.CTkLabel(self.edit_popup, text="Functions:").pack(anchor="w", padx=10, pady=(10,0))
-        scroll = ctk.CTkScrollableFrame(self.edit_popup, height=350)
+        scroll = ctk.CTkScrollableFrame(self.edit_popup, height=300)
         scroll.pack(fill="both", expand=True, padx=10, pady=5)
 
         self.check_groups = []

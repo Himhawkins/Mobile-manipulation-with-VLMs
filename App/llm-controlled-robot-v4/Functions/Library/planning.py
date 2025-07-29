@@ -13,7 +13,7 @@ def trace_targets(
     output_target_path,
     start=None,
     data_folder="Data",
-    spacing=20,
+    spacing=30,
     out_path="Data/trace_overlay.png"
 ):
     # 1) load world
@@ -48,7 +48,8 @@ def trace_targets(
     paths = []
     current = start
     for idx, tgt in enumerate(targets, start=1):
-        path = planner.astar_path(current, tgt)
+        path = planner.find_obstacle_aware_path(current, tgt, 10)
+        # path = planner.astar_path(current, tgt)
         if not path:
             print(f"Segment {idx}: {current} → {tgt} is UNREACHABLE")
         else:

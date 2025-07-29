@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
 import os
 import cv2
+import json
+import math
+from typing import List, Tuple
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.patches import Polygon, Rectangle
-
 from astar import PathPlanner
 from Functions.Library.Agent.load_data import read_data
 
@@ -16,18 +18,6 @@ def trace_targets(
     spacing=20,
     out_path="Data/trace_overlay.png"
 ):
-    """
-    Traces A* paths between each consecutive pair in input_target_list,
-    avoiding obstacles read from data_folder, and writes the
-    concatenated reachable points to output_target_path.
-
-    :param input_target_list: List[Tuple[int,int]] — your sequence of targets
-    :param output_target_path: str — CSV path to write improved targets
-    :param start: Tuple[int,int] or None — optional override of robot start pos
-    :param data_folder: str — where to read frame_img.png, arena_corners, obstacles
-    :param spacing: int — dilation padding for obstacle mask
-    :returns: (frame, arena, obstacles, start, targets, paths)
-    """
     # 1) load world
     data = read_data(data_folder)
     if data is None:
@@ -48,17 +38,20 @@ def trace_targets(
 
     # 3) build planner and dilate obstacle mask
     planner = PathPlanner(obs, (h, w), arena)
-    k = 2 * spacing + 1
+    k = 2 * int(spacing) + 1
     kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (k, k))
     planner.mask = cv2.dilate(planner.mask, kernel)
 
     # 4) use the provided list directly
-    targets = [(int(x), int(y)) for x, y in input_target_list]
+    # for a in input_target_list:
+    #     print(a)
+    targets = [(int(x), int(y)) for x,y in input_target_list]
 
     paths = []
     current = start
     for idx, tgt in enumerate(targets, start=1):
-        path = planner.astar_path(current, tgt)
+        path = planner.find_obstacle_aware_path(current, tgt, 10)
+        # path = planner.astar_path(current, tgt)
         if not path:
             print(f"Segment {idx}: {current} → {tgt} is UNREACHABLE")
         else:
@@ -92,7 +85,13 @@ def trace_targets(
     # draw paths
     for path in paths:
         xs, ys = zip(*path)
+        # either use them directly:
         ax.plot(xs, ys, '-', linewidth=2, color='lime')
+
+        # —or, if you really need them as ints:
+        # xs_i = [int(x) for x in xs]
+        # ys_i = [int(y) for y in ys]
+        # ax.plot(xs_i, ys_i, '-', linewidth=2, color='lime')
 
     ax.legend(loc='upper right')
     plt.tight_layout()
@@ -107,18 +106,3 @@ def trace_targets(
             f.write(f"{x},{y}\n")
 
     return "Path Planned! and saved to {output_target_path}"
-
-
-if __name__ == "__main__":
-    DATA_FOLDER  = "Data"
-    SPACING      = 20
-    # example list of targets instead of a file
-    input_list = [[150,50], [200,80], [350,300]]
-
-    trace_targets(
-        input_target_list=input_list,
-        output_target_path="Targets/improved_targets.txt",
-        data_folder=DATA_FOLDER,
-        spacing=SPACING,
-        out_path="Data/trace_overlay.png"
-    )

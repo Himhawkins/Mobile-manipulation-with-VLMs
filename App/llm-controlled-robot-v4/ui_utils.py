@@ -314,3 +314,20 @@ def draw_path_on_frame(frame, path_file="path.txt", color=(0, 255, 0), thickness
         print(f"[draw_path_on_frame] Error: {e}")
 
     return frame
+
+def get_arena_dimensions(settings_path="Settings/settings.json"):
+    DEFAULT_WIDTH = 1200
+    DEFAULT_HEIGHT = 900
+    try:
+        with open(settings_path, "r") as f:
+            settings = json.load(f)
+    except FileNotFoundError:
+        print("Warning: settings.json not found. Using default arena size.")
+        settings = {}
+    except json.JSONDecodeError as e:
+        print(f"Warning: could not parse settings.json ({e}). Using default arena size.")
+        settings = {}
+    arena_width = int(settings.get("arena_width", str(DEFAULT_WIDTH)))
+    arena_height = int(settings.get("arena_height", str(DEFAULT_HEIGHT)))
+
+    return (arena_width, arena_height)
