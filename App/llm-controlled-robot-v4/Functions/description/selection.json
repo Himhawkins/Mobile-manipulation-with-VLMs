@@ -1,0 +1,24 @@
+[
+  {
+    "name": "point_selection",
+    "description": "Launch an interactive GUI to select target points on the arena image, compute obstacle-aware A* paths for each click, display arena boundaries (solid and eroded inner) and obstacle spacings (dilated outer), allow saving or resetting the path, and return a status message upon completion.",
+    "parameters": {
+      "type": "OBJECT",
+      "properties": {
+        "data_folder": {
+          "type": "STRING",
+          "description": "Path to the data folder containing 'frame_img.png', 'arena_corners.txt', 'obstacles.txt', and 'robot_pos.txt'. Defaults to 'Data'."
+        },
+        "output_target_path": {
+          "type": "STRING",
+          "description": "File path to write the computed path points. Defaults to 'Targets/path.txt'."
+        },
+        "spacing": {
+          "type": "NUMBER",
+          "description": "Number of pixels to inflate obstacles outward and erode the arena boundary inward. Defaults to 30."
+        }
+      },
+      "required": []
+    }
+  }
+]

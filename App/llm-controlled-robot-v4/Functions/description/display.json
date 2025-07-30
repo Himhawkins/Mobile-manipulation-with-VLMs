@@ -1,5 +1,5 @@
  [
- {
+   {
     "name": "display_frame",
     "description": "Displays an OpenCV image from a file in a window. The function waits for a keypress before closing the window.\n\nOutput: This function does not return a value.\n\nExample: `display_frame(window_name='My Image', image_name='capture.jpg')`",
     "parameters": {
