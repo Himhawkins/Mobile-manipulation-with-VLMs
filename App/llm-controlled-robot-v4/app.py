@@ -13,8 +13,7 @@ from agent_utils import save_agent_to_disk, get_agent_folders, get_agent_functio
 from port_utils import refresh_cameras, refresh_serial_ports
 from detection import detect_robot_pose
 from thread_utils import run_in_thread, disable_button, enable_button, callibrate_task, run_task, toggle_execute
-from ui_utils import overlay_arena_and_obstacles, get_overlay_frame, draw_path_on_frame, point_selection
-from motion import move_robot_with_thread
+from ui_utils import overlay_arena_and_obstacles, get_overlay_frame, draw_path_on_frame
 from controller import exec_bot
 
 class DashboardApp(ctk.CTk):
