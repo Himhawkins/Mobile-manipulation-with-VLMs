@@ -14,7 +14,6 @@ from port_utils import refresh_cameras, refresh_serial_ports
 from detection import detect_robot_pose
 from thread_utils import run_in_thread, disable_button, enable_button, callibrate_task, run_task, toggle_execute
 from ui_utils import overlay_arena_and_obstacles, get_overlay_frame, draw_path_on_frame
-from controller import exec_bot
 
 class DashboardApp(ctk.CTk):
     def __init__(self):
