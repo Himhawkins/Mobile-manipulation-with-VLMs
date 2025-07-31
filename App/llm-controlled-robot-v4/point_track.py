@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 import os
 import customtkinter as ctk
 import tkinter as tk
@@ -6,13 +7,10 @@ import cv2
 import numpy as np
 from astar import PathPlanner
 from Functions.Library.Agent.load_data import read_data
-import subprocess
-import sys
-import argparse
 
 def point_track(data_folder='Data',
-                    output_target_path='Targets/path.txt',
-                    spacing=30):
+                output_target_path='Targets/path.txt',
+                spacing=30):
     """
     Launch a CustomTkinter GUI for point selection and path planning.
     Returns a status message upon Save or "User didn't select any points" on close.
@@ -146,33 +144,6 @@ def point_track(data_folder='Data',
     return result_message or "User didn't select any points"
 
 
-def launch_point_selection_subprocess(data_folder='Data',
-                                      output_target_path='Targets/path.txt',
-                                      spacing=30):
-    """
-    Launch the point_track GUI in a separate process using subprocess.
-    Returns the Popen object.
-    """
-    script_path = os.path.abspath(__file__)
-    args = [sys.executable, script_path,
-            '--data_folder', data_folder,
-            '--output_target_path', output_target_path,
-            '--spacing', str(spacing)]
-    return subprocess.Popen(args, cwd=os.path.dirname(script_path))
-
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Point selection GUI")
-    parser.add_argument('--data_folder', default='Data')
-    parser.add_argument('--output_target_path', default='Targets/path.txt')
-    parser.add_argument('--spacing', type=int, default=30)
-    parser.add_argument('--launch_subprocess', action='store_true',
-                        help="If set, launch the GUI in a subprocess and exit")
-    args = parser.parse_args()
-    if args.launch_subprocess:
-        proc = launch_point_selection_subprocess(args.data_folder,
-                                                 args.output_target_path,
-                                                 args.spacing)
-        print(f"Launched subprocess PID={proc.pid}")
-        sys.exit(0)
     msg = point_track()
     print(msg)
