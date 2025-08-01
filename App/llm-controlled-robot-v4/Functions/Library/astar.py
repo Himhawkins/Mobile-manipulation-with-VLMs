@@ -10,28 +10,30 @@ import math
 class PathPlanner:
     """
     Provides obstacle mask construction, Bresenham line intersection tests,
-    and 8-connected A* pathfinding around rectangular obstacles.
+    and 8-connected A* pathfinding around polygonal obstacles.
     """
     def __init__(self, obstacles, image_shape, arena_corners=None):
         """
-        :param obstacles: list of dicts with key "bbox": (x, y, w, h)
+        :param obstacles: list of dicts with key "corners": list of 4 (x,y) points
         :param image_shape: (height, width)
         :param arena_corners: optional 4×2 int array of calibrated arena polygon
         """
-        h, w = image_shape[0], image_shape[1]
-        # start with obstacle rectangles
+        h, w = image_shape
         self.mask = np.zeros((h, w), dtype=np.uint8)
-        for obs in obstacles:
-            x, y, bw, bh = obs["bbox"]
-            cv2.rectangle(self.mask, (x, y), (x + bw, y + bh), 255, -1)
 
-        # now also forbid everything _outside_ arena_corners
+        # Fill obstacle polygons into mask
+        for obs in obstacles:
+            if "corners" not in obs:
+                raise ValueError("Each obstacle must contain a 'corners' key")
+            corners = np.array(obs["corners"], dtype=np.int32)
+            cv2.fillPoly(self.mask, [corners], 255)
+
+        # Optionally mask out everything outside the arena
         if arena_corners is not None:
             arena_mask = np.zeros_like(self.mask)
             poly = np.array(arena_corners, dtype=np.int32)
             cv2.fillPoly(arena_mask, [poly], 255)
             outside = cv2.bitwise_not(arena_mask)
-            # union: outside-of-arena OR obstacles
             self.mask = cv2.bitwise_or(self.mask, outside)
 
     def line_intersects_obstacle(self, p1, p2):
@@ -80,12 +82,11 @@ class PathPlanner:
         h, w = self.mask.shape
 
         def hscore(a, b):
-            # Euclidean distance heuristic
             return math.hypot(a[0] - b[0], a[1] - b[1])
 
         neighbors = [(-1, 0), (1, 0), (0, -1), (0, 1),
                      (-1, -1), (-1, 1), (1, -1), (1, 1)]
-        open_set = []  # heap of (f_score, g_score, node)
+        open_set = []
         heapq.heappush(open_set, (hscore(start, goal), 0, start))
         came_from = {}
         g_score = {start: 0}
@@ -93,7 +94,6 @@ class PathPlanner:
         while open_set:
             f, g, current = heapq.heappop(open_set)
             if current == goal:
-                # reconstruct path
                 path = []
                 while current:
                     path.append(current)
@@ -119,7 +119,7 @@ class PathPlanner:
                         (tentative_g + hscore(neighbor, goal), tentative_g, neighbor)
                     )
         return None
-    
+
     def simplify_path(self, path, min_dist=10):
         """
         Thin out a dense pixel path by only keeping points at least
@@ -133,11 +133,10 @@ class PathPlanner:
             if math.hypot(pt[0] - last[0], pt[1] - last[1]) >= min_dist:
                 simplified.append(pt)
                 last = pt
-        # ensure goal is present
         if simplified[-1] != path[-1]:
             simplified.append(path[-1])
         return simplified
-    
+
     def find_obstacle_aware_path(self, start, goal, simplify_dist=None):
         """
         If the straight line is clear, returns [start, goal].

@@ -11,7 +11,7 @@ import argparse
 
 def point_track(data_folder='Data',
                 output_target_path='Targets/path.txt',
-                spacing=30):
+                spacing=25):
     """
     Launch a CustomTkinter GUI for point selection and path planning.
     Returns a status message upon Save or "User didn't select any points" on close.
@@ -27,7 +27,10 @@ def point_track(data_folder='Data',
     if data is None:
         return f"Error: Could not read data from '{data_folder}'"
     arena = [tuple(map(int, row)) for row in data['arena_corners']]
-    obs = [{"bbox": tuple(map(int, row))} for row in data['obstacles']]
+
+    # Use 4-corner obstacle polygons directly
+    obs = [{"corners": [tuple(pt) for pt in row]} for row in data['obstacles']]
+
     sx, sy, _ = data['robot_pos']
     current = (int(sx), int(sy))
 
@@ -80,45 +83,63 @@ def point_track(data_folder='Data',
         def draw_overlay(self):
             self.canvas.delete("overlay")
             img = frame.copy()
+
             # draw arena
-            cv2.polylines(img, [np.array(arena, np.int32)], True, (0,255,255), 2)
+            cv2.polylines(img, [np.array(arena, np.int32)], True, (0, 255, 255), 2)
+
             # draw inner boundary
             for i in range(len(inner_boundary)):
                 cv2.line(img,
-                         inner_boundary[i],
-                         inner_boundary[(i+1)%len(inner_boundary)],
-                         (255,255,0), 1, cv2.LINE_AA)
-            # draw obstacles + spacing
-            for x,y,ww,hh in [r['bbox'] for r in obs]:
-                cv2.rectangle(img, (x,y), (x+ww, y+hh), (0,0,255), -1)
-                tl = (x - spacing, y - spacing)
-                br = (x + ww + spacing, y + hh + spacing)
-                for dx in range(tl[0], br[0], 10):
-                    cv2.line(img, (dx, tl[1]), (dx+5, tl[1]), (0,255,255), 1)
-                    cv2.line(img, (dx, br[1]), (dx+5, br[1]), (0,255,255), 1)
-                for dy in range(tl[1], br[1], 10):
-                    cv2.line(img, (tl[0], dy), (tl[0], dy+5), (0,255,255), 1)
-                    cv2.line(img, (br[0], dy), (br[0], dy+5), (0,255,255), 1)
+                        inner_boundary[i],
+                        inner_boundary[(i + 1) % len(inner_boundary)],
+                        (255, 255, 0), 1, cv2.LINE_AA)
+
+            # draw obstacles + offset polygons
+            for ob in obs:
+                corners = np.array(ob["corners"], dtype=np.int32)
+
+                # Draw original obstacle in red
+                cv2.fillPoly(img, [corners], (0, 0, 255))
+
+                # Create mask of the obstacle
+                mask = np.zeros((h, w), dtype=np.uint8)
+                cv2.fillPoly(mask, [corners], 255)
+
+                # Dilate the mask to get padding area
+                kernel = cv2.getStructuringElement(
+                    cv2.MORPH_ELLIPSE, (2 * spacing + 1, 2 * spacing + 1))
+                dilated = cv2.dilate(mask, kernel)
+
+                # Find contours of the dilated mask
+                contours, _ = cv2.findContours(
+                    dilated, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+                if contours:
+                    offset_poly = cv2.approxPolyDP(contours[0], epsilon=2.0, closed=True)
+                    cv2.polylines(img, [offset_poly], isClosed=True, color=(0, 255, 255), thickness=2)
+
             # draw paths
             for path in paths:
-                for (x1,y1),(x2,y2) in zip(path, path[1:]):
-                    cv2.line(img, (int(x1), int(y1)), (int(x2), int(y2)), (0,255,0), 2)
+                for (x1, y1), (x2, y2) in zip(path, path[1:]):
+                    cv2.line(img, (int(x1), int(y1)), (int(x2), int(y2)), (0, 255, 0), 2)
+
             # draw robot & points
-            cv2.circle(img, current, 6, (255,255,0), -1)
-            for px,py in points:
-                cv2.circle(img, (px,py), 5, (255,255,255), -1)
+            cv2.circle(img, current, 6, (255, 255, 0), -1)
+            for px, py in points:
+                cv2.circle(img, (px, py), 5, (255, 255, 255), -1)
+
             self.overlay = ImageTk.PhotoImage(
                 Image.fromarray(cv2.cvtColor(img, cv2.COLOR_BGR2RGB)))
             self.canvas.create_image(0, 0, image=self.overlay, anchor="nw", tags="overlay")
 
+
         def on_click(self, event):
             nonlocal points, paths, current
             x, y = event.x, event.y
-            segment = planner.find_obstacle_aware_path(current, (x,y), 10)
+            segment = planner.find_obstacle_aware_path(current, (x, y), 10)
             if segment:
-                points.append((x,y))
+                points.append((x, y))
                 paths.append(segment)
-                current = (x,y)
+                current = (x, y)
             else:
                 print(f"Unable to reach {(x,y)} from {current}")
             self.draw_overlay()
@@ -127,7 +148,7 @@ def point_track(data_folder='Data',
             nonlocal result_message
             with open(output_target_path, 'w') as f:
                 for p in paths:
-                    for ux,uy in p:
+                    for ux, uy in p:
                         f.write(f"{int(ux)},{int(uy)}\n")
             result_message = f"Path Planned! and saved to {output_target_path}"
             self.destroy()
@@ -141,15 +162,13 @@ def point_track(data_folder='Data',
 
     app = App()
     app.mainloop()
-
     return result_message or "User didn't select any points"
-
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Point selection GUI")
     parser.add_argument('--data_folder', default='Data')
     parser.add_argument('--output_target_path', default='Targets/path.txt')
-    parser.add_argument('--spacing',      type=int, default=30)
+    parser.add_argument('--spacing', type=int, default=25)
     args = parser.parse_args()
 
     msg = point_track(

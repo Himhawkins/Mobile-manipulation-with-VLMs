@@ -2,131 +2,112 @@
 import os
 import cv2
 import numpy as np
+import matplotlib.pyplot as plt
+from matplotlib.patches import Polygon, Rectangle
+
 from astar import PathPlanner
 from Functions.Library.Agent.load_data import read_data
 
-def point_selection(window_name='Point Selection',
-                    image_name='live.jpg',
-                    image_folder='.',
-                    data_folder='Data',
-                    button_height=50,
-                    spacing=10):
-    # 1) Load image
-    img_path = os.path.join(image_folder, image_name)
-    image = cv2.imread(img_path)
-    if image is None:
-        print(f"Error: Could not read '{image_name}' from '{image_folder}'.")
-        return
-
-    h, w = image.shape[:2]
-
-    # 2) Load world data
+def trace_targets(
+    input_target_list,          # now a list of [x, y] or (x, y)
+    output_target_path,
+    start=None,
+    data_folder="Data",
+    spacing=25,
+    out_path="Data/trace_overlay.png"
+):
+    # 1) load world
     data = read_data(data_folder)
     if data is None:
-        print(f"Error: Could not read data from '{data_folder}'.")
-        return
+        raise RuntimeError(f"Could not read data from '{data_folder}'")
 
     arena = [tuple(map(int, row)) for row in data['arena_corners']]
-    obs   = [{"bbox": tuple(map(int, row))} for row in data['obstacles']]
+    polygon_obs = [ [tuple(map(int, pt)) for pt in poly] for poly in data['obstacles']]
+    obs = [{"corners": [tuple(pt) for pt in row]} for row in data['obstacles']]
     sx, sy, _ = data['robot_pos']
-    current = (int(sx), int(sy))
+    if start is None:
+        start = (int(sx), int(sy))
 
-    # 3) Build planner and dilate mask
+    # 2) load the image
+    frame_path = os.path.join(data_folder, "frame_img.png")
+    frame = cv2.imread(frame_path)
+    if frame is None:
+        raise FileNotFoundError(f"Could not load image at '{frame_path}'")
+    h, w = frame.shape[:2]
+
+    # 3) convert polygon obstacles into bounding boxes for planner
+    obs = [{"corners": poly} for poly in polygon_obs]
+
     planner = PathPlanner(obs, (h, w), arena)
-    k = 2 * spacing + 1
+    k = 2 * int(spacing) + 1
     kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (k, k))
     planner.mask = cv2.dilate(planner.mask, kernel)
 
-    # 4) Prepare canvas + buttons
-    canvas = np.zeros((h + button_height, w, 3), dtype=np.uint8)
-    canvas[:h] = image.copy()
-    btn_w = w // 4
-    save_btn  = ((w//8,         h + 5), (w//8 + btn_w,         h + button_height - 5))
-    reset_btn = ((w - w//8 - btn_w, h + 5), (w - w//8, h + button_height - 5))
+    # 4) use the provided list directly
+    targets = [(int(x), int(y)) for x,y in input_target_list]
 
-    points = []     # raw click targets
-    paths  = []     # each A* segment
+    paths = []
+    current = start
+    for idx, tgt in enumerate(targets, start=1):
+        path = planner.find_obstacle_aware_path(current, tgt, 10)
+        if not path:
+            print(f"Segment {idx}: {current} → {tgt} is UNREACHABLE")
+        else:
+            print(f"Segment {idx}: {current} → {tgt} [{len(path)} steps]")
+            paths.append(path)
+            current = tgt
 
-    def draw():
-        # base image
-        canvas[:h] = image.copy()
-        # draw arena boundary
-        cv2.polylines(canvas, [np.array(arena, np.int32)], True, (0,255,255), 2)
-        # draw obstacles
-        for x,y,ww,hh in [r['bbox'] for r in obs]:
-            cv2.rectangle(canvas, (x,y), (x+ww, y+hh), (0,0,255), -1)
-        # draw all paths
-        for path in paths:
-            for (x1,y1),(x2,y2) in zip(path, path[1:]):
-                cv2.line(canvas, (int(x1),int(y1)), (int(x2),int(y2)), (0,255,0), 2)
-        # draw current & clicked points
-        cv2.circle(canvas, current, 6, (255,255,0), -1)
-        for x,y in points:
-            cv2.circle(canvas, (x,y), 5, (255,255,255), -1)
-        # buttons
-        cv2.rectangle(canvas, save_btn[0], save_btn[1],  (50,50,50), -1)
-        cv2.putText(canvas, "Save",  (save_btn[0][0]+20, save_btn[1][1]-15),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255,255,255), 2)
-        cv2.rectangle(canvas, reset_btn[0], reset_btn[1], (50,50,50), -1)
-        cv2.putText(canvas, "Reset", (reset_btn[0][0]+15, reset_btn[1][1]-15),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255,255,255), 2)
+    # 5) plot & save overlay
+    img_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+    fig, ax = plt.subplots(figsize=(10, 8))
+    ax.imshow(img_rgb)
+    ax.axis("off")
 
-        cv2.imshow(window_name, canvas)
+    # arena boundary
+    ax.add_patch(Polygon(arena, closed=True, fill=False,
+                         edgecolor='yellow', linewidth=2))
 
-    def click_event(event, x, y, flags, param):
-        nonlocal points, paths, current
-        if event != cv2.EVENT_LBUTTONDOWN:
-            return
+    # draw polygon obstacles
+    for poly in polygon_obs:
+        ax.add_patch(Polygon(poly, closed=True, facecolor='red', alpha=0.3, edgecolor='white'))
 
-        # Save button
-        if save_btn[0][0] <= x <= save_btn[1][0] and save_btn[0][1] <= y <= save_btn[1][1]:
-            out_pts = os.path.join(data_folder, "improved_targets.txt")
-            with open(out_pts, 'w') as f:
-                for path in paths:
-                    for px, py in path:
-                        f.write(f"{int(px)},{int(py)}\n")
-            print(f"Saved full path to {out_pts}")
-            return
+    # robot start
+    ax.plot(start[0], start[1], 'o', color='cyan', markersize=10, label='robot')
 
-        # Reset button
-        if reset_btn[0][0] <= x <= reset_btn[1][0] and reset_btn[0][1] <= y <= reset_btn[1][1]:
-            points = []
-            paths  = []
-            current = (int(sx), int(sy))
-            print("Reset all selections.")
-            draw()
-            return
+    # raw targets
+    if targets:
+        txs, tys = zip(*targets)
+        ax.scatter(txs, tys, s=80, facecolors='none',
+                   edgecolors='white', label='targets')
 
-        # Otherwise: click in image → plan segment
-        if y < h:
-            target = (x, y)
-            pts_path = planner.find_obstacle_aware_path(current, target, 10)
-            if not pts_path:
-                print(f"⚠️ Unable to reach {target} from {current}")
-            else:
-                print(f"Path segment: {current} → {target} ({len(pts_path)} steps)")
-                points.append(target)
-                paths.append(pts_path)
-                current = target
-            draw()
+    # draw paths
+    for path in paths:
+        xs, ys = zip(*path)
+        ax.plot(xs, ys, '-', linewidth=2, color='lime')
 
-    # window setup
-    cv2.namedWindow(window_name)
-    cv2.setMouseCallback(window_name, click_event)
-    draw()
+    ax.legend(loc='upper right')
+    plt.tight_layout()
+    fig.savefig(out_path, bbox_inches='tight')
+    plt.close(fig)
 
-    print("Click in the image to add targets.  Save or Reset via buttons below.  ESC to exit.")
-    while True:
-        if cv2.waitKey(1) & 0xFF == 27:
-            break
+    # 6) flatten and save
+    improved_points = [pt for path in paths for pt in path]
+    with open(output_target_path, "w") as f:
+        for x, y in improved_points:
+            f.write(f"{x},{y}\n")
 
-    cv2.destroyAllWindows()
-    print("Final target points:", points)
-    return paths
+    return f"Path Planned! and saved to {output_target_path}"
 
 
 if __name__ == "__main__":
-    point_selection(window_name="Point Selection",
-                    image_name="frame_img.png",
-                    image_folder="Data",
-                    data_folder="Data")
+    DATA_FOLDER  = "Data"
+    SPACING      = 20
+    input_list = [[205.0, 97.0], [383.0, 31.0]]
+
+    trace_targets(
+        input_target_list=input_list,
+        output_target_path="Targets/improved_targets.txt",
+        data_folder=DATA_FOLDER,
+        spacing=SPACING,
+        out_path="Data/trace_overlay.png"
+    )

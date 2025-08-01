@@ -134,38 +134,30 @@ def open_settings_popup(app):
 
 def overlay_arena_and_obstacles(frame, arena_path="Data/arena_corners.txt", obstacles_path="Data/obstacles.txt"):
     overlay = frame.copy()
-    # 1. Draw arena (yellow polygon)
     try:
         with open(arena_path, "r") as f:
-            arena_pts = [list(map(int, line.strip().split(",")))
-                         for line in f if line.strip()]
+            arena_pts = [list(map(int, line.strip().split(","))) for line in f if line.strip()]
         if len(arena_pts) == 4:
             pts = np.array(arena_pts, dtype=np.int32).reshape((-1, 1, 2))
-            cv2.polylines(overlay, [pts], isClosed=True,
-                          color=(0, 255, 255), thickness=2)
-        else:
-            print(f"[WARN] '{arena_path}' does not contain exactly 4 points.")
+            cv2.polylines(overlay, [pts], isClosed=True, color=(0, 255, 255), thickness=2)
     except Exception as e:
         print(f"[ERROR] Could not read arena corners from '{arena_path}': {e}")
-    # 2. Draw obstacles (red rectangles)
+
     try:
         with open(obstacles_path, "r") as f:
             for line in f:
-                parts = line.strip().split(",")
-                if len(parts) != 4:
-                    continue
-                x, y, w, h = map(int, parts)
-                cv2.rectangle(overlay,
-                              (x, y),
-                              (x + w, y + h),
-                              color=(0, 0, 255),
-                              thickness=-1)  # filled
+                line = line.strip().replace("(", "").replace(")", "")
+                parts = list(map(int, line.split(",")))
+                if len(parts) == 8:
+                    corners = [(parts[i], parts[i+1]) for i in range(0, 8, 2)]
+                    cv2.fillPoly(overlay, [np.array(corners, dtype=np.int32)], (0, 0, 255))
     except Exception as e:
         print(f"[ERROR] Could not read obstacles from '{obstacles_path}': {e}")
     return overlay
 
 def show_frame_with_overlay(parent, frame, arena_path="Data/arena_corners.txt", obstacles_path="Data/obstacles.txt"):
     overlay = frame.copy()
+
     # 1. Draw arena (green polygon)
     try:
         with open(arena_path, "r") as f:
@@ -178,15 +170,16 @@ def show_frame_with_overlay(parent, frame, arena_path="Data/arena_corners.txt", 
     except Exception as e:
         print(f"[ERROR] Reading arena corners failed: {e}")
 
-    # 2. Draw obstacles (red rectangles)
+    # 2. Draw obstacles (red polygons from corner format)
     try:
         with open(obstacles_path, "r") as f:
             for line in f:
-                parts = line.strip().split(",")
-                if len(parts) != 4:
+                line = line.strip().replace("(", "").replace(")", "")
+                parts = list(map(int, line.split(",")))
+                if len(parts) != 8:
                     continue
-                x, y, w, h = map(int, parts)
-                cv2.rectangle(overlay, (x, y), (x + w, y + h), (0, 0, 255), -1)
+                corners = [(parts[i], parts[i+1]) for i in range(0, 8, 2)]
+                cv2.fillPoly(overlay, [np.array(corners, dtype=np.int32)], (0, 0, 255))
     except Exception as e:
         print(f"[ERROR] Reading obstacles failed: {e}")
 
@@ -207,6 +200,7 @@ def show_frame_with_overlay(parent, frame, arena_path="Data/arena_corners.txt", 
     popup.focus()
     popup.grab_set()
 
+
 def get_overlay_frame(
     warp_size=(640, 640),
     img_path="Data/frame_img.png",
@@ -214,19 +208,6 @@ def get_overlay_frame(
     obstacles_path="Data/obstacles.txt",
     path_file="Targets/path.txt"
 ):
-    """
-    Returns a warped and cropped arena frame with overlaid arena, obstacles, and path.
-
-    Parameters:
-        img_path (str): Path to base frame image.
-        arena_path (str): File containing 4 arena corners (x,y).
-        obstacles_path (str): File containing obstacles (x,y,w,h).
-        path_file (str): File containing path points (x,y).
-        warp_size (tuple): Output image size (width, height) of warped arena.
-
-    Returns:
-        np.ndarray: Warped and annotated frame (BGR image).
-    """
     overlay = cv2.imread(img_path)
     if overlay is None:
         print(f"[get_overlay_frame] Warning: Could not read image from '{img_path}'")
@@ -260,18 +241,19 @@ def get_overlay_frame(
         print(f"[get_overlay_frame] Arena read error: {e}")
         return overlay
 
-    # Draw obstacles
+    # Draw obstacles (filled red polygons from corner format)
     try:
         with open(obstacles_path, "r") as f:
             for line in f:
-                parts = line.strip().split(",")
-                if len(parts) == 4:
-                    x, y, w, h = map(int, parts)
-                    cv2.rectangle(overlay, (x, y), (x + w, y + h), (0, 0, 255), -1)
+                line = line.strip().replace("(", "").replace(")", "")
+                parts = list(map(int, line.split(",")))
+                if len(parts) == 8:
+                    corners = [(parts[i], parts[i+1]) for i in range(0, 8, 2)]
+                    cv2.fillPoly(overlay, [np.array(corners, dtype=np.int32)], (0, 0, 255))
     except Exception as e:
         print(f"[get_overlay_frame] Obstacle read error: {e}")
 
-    # Draw path
+    # Draw path (green lines)
     try:
         if os.path.exists(path_file):
             with open(path_file, "r") as f:
@@ -297,7 +279,6 @@ def get_overlay_frame(
     except Exception as e:
         print(f"[get_overlay_frame] Warp error: {e}")
         return overlay
-
 
 def draw_path_on_frame(frame, path_file="path.txt", color=(0, 255, 0), thickness=2):
     if not os.path.exists(path_file):
@@ -336,155 +317,12 @@ def get_arena_dimensions(settings_path="Settings/settings.json"):
 
     return (arena_width, arena_height)
 
-# def point_selection(parent,
-#                     data_folder='Data',
-#                     output_target_path='Targets/path.txt',
-#                     spacing=30):
-#     """
-#     Launch a CustomTkinter Toplevel on `parent` for point selection and path planning.
-#     Blocks until the window is closed, then returns a status message.
-#     """
-#     # --- load data ---
-#     img_path = os.path.join(data_folder, "frame_img.png")
-#     frame = cv2.imread(img_path)
-#     if frame is None:
-#         return f"Error: Could not read '{img_path}'"
-#     h, w = frame.shape[:2]
-
-#     data = read_data(data_folder)
-#     if data is None:
-#         return f"Error: Could not read data from '{data_folder}'"
-#     arena = [tuple(map(int, row)) for row in data['arena_corners']]
-#     obs = [{"bbox": tuple(map(int, row))} for row in data['obstacles']]
-#     sx, sy, _ = data['robot_pos']
-#     start_pos = (int(sx), int(sy))
-
-#     # build planner
-#     planner = PathPlanner(obs, (h, w), arena)
-#     k = 2 * spacing + 1
-#     kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (k, k))
-#     planner.mask = cv2.dilate(planner.mask, kernel)
-
-#     # compute inner boundary
-#     arena_mask = np.zeros((h, w), dtype=np.uint8)
-#     cv2.fillPoly(arena_mask, [np.array(arena, np.int32)], 255)
-#     eroded = cv2.erode(arena_mask, kernel)
-#     ctrs, _ = cv2.findContours(eroded, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-#     if not ctrs:
-#         inner_boundary = arena
-#     else:
-#         large = max(ctrs, key=cv2.contourArea)
-#         approx = cv2.approxPolyDP(large, spacing, True)
-#         inner_boundary = [tuple(pt[0]) for pt in approx]
-
-#     # convert frame for display
-#     pil = Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
-
-#     # shared state
-#     points = []
-#     paths = []
-#     result_message = None
-
-#     class PointSelectionWindow(ctk.CTkToplevel):
-#         def __init__(self, master):
-#             super().__init__(master)
-#             self.title("Point Selection")
-#             # ensure modal behavior
-#             self.transient(master)
-#             self.grab_set()
-
-#             # canvas
-#             self.canvas = tk.Canvas(self, width=w, height=h)
-#             self.canvas.pack()
-#             self.tk_img = ImageTk.PhotoImage(pil)
-#             self.canvas.create_image(0, 0, image=self.tk_img, anchor="nw", tags="bg")
-
-#             # buttons
-#             btn_frame = ctk.CTkFrame(self)
-#             btn_frame.pack(fill="x", pady=5)
-#             ctk.CTkButton(btn_frame, text="Save", command=self.on_save).pack(side="left", padx=20)
-#             ctk.CTkButton(btn_frame, text="Reset", command=self.on_reset).pack(side="right", padx=20)
-
-#             # mouse click
-#             self.canvas.bind("<Button-1>", self.on_click)
-
-#             # initial draw
-#             self.draw_overlay()
-
-#         def draw_overlay(self):
-#             self.canvas.delete("overlay")
-#             img = frame.copy()
-#             # arena
-#             cv2.polylines(img, [np.array(arena, np.int32)], True, (0,255,255), 2)
-#             # inner boundary
-#             for i in range(len(inner_boundary)):
-#                 cv2.line(img,
-#                          inner_boundary[i],
-#                          inner_boundary[(i+1)%len(inner_boundary)],
-#                          (255,255,0), 1, cv2.LINE_AA)
-#             # obstacles + spacing
-#             for x,y,ww,hh in [r['bbox'] for r in obs]:
-#                 cv2.rectangle(img, (x,y), (x+ww, y+hh), (0,0,255), -1)
-#                 tl = (x - spacing, y - spacing)
-#                 br = (x + ww + spacing, y + hh + spacing)
-#                 for dx in range(tl[0], br[0], 10):
-#                     cv2.line(img, (dx, tl[1]), (dx+5, tl[1]), (0,255,255), 1)
-#                     cv2.line(img, (dx, br[1]), (dx+5, br[1]), (0,255,255), 1)
-#                 for dy in range(tl[1], br[1], 10):
-#                     cv2.line(img, (tl[0], dy), (tl[0], dy+5), (0,255,255), 1)
-#                     cv2.line(img, (br[0], dy), (br[0], dy+5), (0,255,255), 1)
-#             # paths
-#             for path in paths:
-#                 for (x1,y1),(x2,y2) in zip(path, path[1:]):
-#                     cv2.line(img, (int(x1), int(y1)), (int(x2), int(y2)), (0,255,0), 2)
-#             # robot & points
-#             cv2.circle(img, start_pos, 6, (255,255,0), -1)
-#             for px,py in points:
-#                 cv2.circle(img, (px,py), 5, (255,255,255), -1)
-
-#             self.overlay = ImageTk.PhotoImage(
-#                 Image.fromarray(cv2.cvtColor(img, cv2.COLOR_BGR2RGB)))
-#             self.canvas.create_image(0, 0, image=self.overlay, anchor="nw", tags="overlay")
-
-#         def on_click(self, event):
-#             nonlocal points, paths, start_pos
-#             x, y = event.x, event.y
-#             seg = planner.find_obstacle_aware_path(start_pos, (x,y), 10)
-#             if seg:
-#                 points.append((x,y))
-#                 paths.append(seg)
-#                 start_pos = (x,y)
-#             else:
-#                 print(f"Unable to reach {(x,y)} from {start_pos}")
-#             self.draw_overlay()
-
-#         def on_save(self):
-#             nonlocal result_message
-#             with open(output_target_path, 'w') as f:
-#                 for p in paths:
-#                     for ux,uy in p:
-#                         f.write(f"{int(ux)},{int(uy)}\n")
-#             result_message = f"Path Planned! and saved to {output_target_path}"
-#             self.destroy()
-
-#         def on_reset(self):
-#             nonlocal points, paths, start_pos
-#             points.clear()
-#             paths.clear()
-#             start_pos = (int(sx), int(sy))
-#             self.draw_overlay()
-
-#     # create and wait
-#     win = PointSelectionWindow(parent)
-#     parent.wait_window(win)
-#     return result_message or "User didn't select any points"
-
 def point_selection(data_folder='Data',
                     output_target_path='Targets/path.txt',
-                    spacing=30):
+                    spacing=25):
     """
     Launch a CustomTkinter GUI for point selection and path planning.
-    Returns a status message upon Save or "User didn't select any points" on close.
+    Supports 4-corner polygon obstacles.
     """
     # --- load data ---
     img_path = os.path.join(data_folder, "frame_img.png")
@@ -497,9 +335,15 @@ def point_selection(data_folder='Data',
     if data is None:
         return f"Error: Could not read data from '{data_folder}'"
     arena = [tuple(map(int, row)) for row in data['arena_corners']]
-    obs = [{"bbox": tuple(map(int, row))} for row in data['obstacles']]
+    polygon_obs = [ [tuple(map(int, pt)) for pt in poly] for poly in data['obstacles'] ]
     sx, sy, _ = data['robot_pos']
     current = (int(sx), int(sy))
+
+    # convert to bounding boxes for PathPlanner
+    obs = []
+    for poly in polygon_obs:
+        x, y, w_, h_ = cv2.boundingRect(np.array(poly))
+        obs.append({"bbox": (x, y, w_, h_)})
 
     # build planner
     planner = PathPlanner(obs, (h, w), arena)
@@ -531,52 +375,51 @@ def point_selection(data_folder='Data',
         def __init__(self):
             super().__init__()
             self.title("Point Selection")
-            # canvas
             self.canvas = tk.Canvas(self, width=w, height=h)
             self.canvas.pack()
             self.tk_img = ImageTk.PhotoImage(pil)
             self.canvas.create_image(0, 0, image=self.tk_img, anchor="nw", tags="bg")
-            # buttons
+
             btn_frame = ctk.CTkFrame(self)
             btn_frame.pack(fill="x", pady=5)
             self.save_btn = ctk.CTkButton(btn_frame, text="Save", command=self.save)
             self.save_btn.pack(side="left", padx=20)
             self.reset_btn = ctk.CTkButton(btn_frame, text="Reset", command=self.reset)
             self.reset_btn.pack(side="right", padx=20)
-            # mouse click
+
             self.canvas.bind("<Button-1>", self.on_click)
             self.draw_overlay()
 
         def draw_overlay(self):
             self.canvas.delete("overlay")
             img = frame.copy()
-            # draw arena
+
+            # arena
             cv2.polylines(img, [np.array(arena, np.int32)], True, (0,255,255), 2)
-            # draw inner boundary
+
+            # inner boundary
             for i in range(len(inner_boundary)):
                 cv2.line(img,
                          inner_boundary[i],
                          inner_boundary[(i+1)%len(inner_boundary)],
                          (255,255,0), 1, cv2.LINE_AA)
-            # draw obstacles + spacing
-            for x,y,ww,hh in [r['bbox'] for r in obs]:
-                cv2.rectangle(img, (x,y), (x+ww, y+hh), (0,0,255), -1)
-                tl = (x - spacing, y - spacing)
-                br = (x + ww + spacing, y + hh + spacing)
-                for dx in range(tl[0], br[0], 10):
-                    cv2.line(img, (dx, tl[1]), (dx+5, tl[1]), (0,255,255), 1)
-                    cv2.line(img, (dx, br[1]), (dx+5, br[1]), (0,255,255), 1)
-                for dy in range(tl[1], br[1], 10):
-                    cv2.line(img, (tl[0], dy), (tl[0], dy+5), (0,255,255), 1)
-                    cv2.line(img, (br[0], dy), (br[0], dy+5), (0,255,255), 1)
+
+            # draw polygon obstacles
+            for poly in polygon_obs:
+                pts = np.array(poly, dtype=np.int32)
+                cv2.fillPoly(img, [pts], (0,0,255))
+                cv2.polylines(img, [pts], isClosed=True, color=(255,255,255), thickness=1)
+
             # draw paths
             for path in paths:
                 for (x1,y1),(x2,y2) in zip(path, path[1:]):
                     cv2.line(img, (int(x1), int(y1)), (int(x2), int(y2)), (0,255,0), 2)
-            # draw robot & points
+
+            # draw robot and points
             cv2.circle(img, current, 6, (255,255,0), -1)
             for px,py in points:
                 cv2.circle(img, (px,py), 5, (255,255,255), -1)
+
             self.overlay = ImageTk.PhotoImage(
                 Image.fromarray(cv2.cvtColor(img, cv2.COLOR_BGR2RGB)))
             self.canvas.create_image(0, 0, image=self.overlay, anchor="nw", tags="overlay")

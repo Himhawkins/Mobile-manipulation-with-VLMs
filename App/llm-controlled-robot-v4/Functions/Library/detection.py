@@ -5,6 +5,7 @@ import numpy as np
 from PIL import Image
 from dotenv import load_dotenv
 import os
+from Functions.Library.warping import get_warped_image, unwarp_points
 
 class ObjectDetector:
     def __init__(self, prompt="black rectangles") -> None:
@@ -50,7 +51,6 @@ def detect_and_list(image, prompt):
     return obstacles, count
 
 def detect_and_get_centroids(frame, prompt="Blue Cricles", save_path=None):
-    #frame = cv2.imread(img_path)
     objects, _ = detect_and_list(frame, prompt)
     centroids = [o["centroid"] for o in objects]
     if save_path is not None:
@@ -68,6 +68,36 @@ def detect_and_get_bbox(img_path="Data/frame_img.png", prompt="Blue Cricles", sa
                 for x, y, w, h in obstacles:
                     f.write(f"{x},{y},{w},{h}\n")
     return obstacles
+
+def detect_obstacles(img_path="Data/frame_img.png", prompt="Blue Circles", save_path=None):
+    frame = get_warped_image(img_path, data_folder="Data", settings_path="Settings/settings.json")
+    objects, _ = detect_and_list(frame, prompt)
+
+    # Convert bbox to corner coordinates
+    warped_obstacles = []
+    for x, y, w, h in [o["bbox"] for o in objects]:
+        corners = [
+            (x, y),           # top-left
+            (x + w, y),       # top-right
+            (x + w, y + h),   # bottom-right
+            (x, y + h)        # bottom-left
+        ]
+        warped_obstacles.append(corners)
+
+    # Flatten all corner points, unwarp them, and group back
+    flat_corners = [pt for obstacle in warped_obstacles for pt in obstacle]
+    unwarped_flat = unwarp_points(flat_corners, data_folder="Data", settings_path="Settings/settings.json")
+    unwarped_obstacles = [unwarped_flat[i:i+4] for i in range(0, len(unwarped_flat), 4)]
+
+    # Optionally save
+    if save_path is not None:
+        with open(save_path, "w") as f:
+            for corners in unwarped_obstacles:
+                line = ",".join(f"({x},{y})" for (x, y) in corners)
+                f.write(line + "\n")
+
+    return unwarped_obstacles
+
 
 def detect_arena(img_path="Data/frame_img.png", prompt="Blue Circles", save_path=None):
     frame = cv2.imread(img_path)
@@ -135,7 +165,25 @@ def main():
     #frame = cv2.imread(IMG_PATH)
     #save_img_to_path(frame, save_path="Data/frame_img.png")
     g=detect_objects(IMG_PATH, "Blue Circles", save_path="Data/arena_corners.txt")
-    #detect_and_get_bbox(IMG_PATH, "Obstacles Black Rectangles", save_path="Data/obstacles.txt")
+    #detect_and_get_bbox(img_path=IMG_PATH, prompt="Obstacles Black Rectangles", save_path="Data/obstacles.txt")
     print("lol", g)
 if __name__ == "__main__":
-    main()
+    # main()
+    obstacles = detect_obstacles(
+        img_path="Data/frame_img.png",
+        prompt="Solid Black Rectangles",                     # or any other valid prompt
+        save_path="Data/obstacles.txt"             # optional: saves the unwarped corners
+    )
+    # Print results
+    for i, corners in enumerate(obstacles):
+        print(f"Obstacle {i+1}: {corners}")
+
+    # Optional: draw obstacles on original image
+    frame = cv2.imread("Data/frame_img.png")
+    for corners in obstacles:
+        pts = np.array(corners, np.int32).reshape((-1, 1, 2))
+        cv2.polylines(frame, [pts], isClosed=True, color=(0, 255, 0), thickness=2)
+
+    cv2.imshow("Unwarped Obstacles", frame)
+    cv2.waitKey(0)
+    cv2.destroyAllWindows()

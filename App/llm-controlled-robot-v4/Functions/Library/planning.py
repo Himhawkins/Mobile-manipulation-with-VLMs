@@ -13,7 +13,7 @@ def trace_targets(
     output_target_path,
     start=None,
     data_folder="Data",
-    spacing=30,
+    spacing=25,
     out_path="Data/trace_overlay.png"
 ):
     # 1) load world
@@ -22,7 +22,8 @@ def trace_targets(
         raise RuntimeError(f"Could not read data from '{data_folder}'")
 
     arena = [tuple(map(int, row)) for row in data['arena_corners']]
-    obs   = [{"bbox": tuple(map(int, row))} for row in data['obstacles']]
+    polygon_obs = [ [tuple(map(int, pt)) for pt in poly] for poly in data['obstacles']]
+    obs = [{"corners": [tuple(pt) for pt in row]} for row in data['obstacles']]
     sx, sy, _ = data['robot_pos']
     if start is None:
         start = (int(sx), int(sy))
@@ -34,22 +35,21 @@ def trace_targets(
         raise FileNotFoundError(f"Could not load image at '{frame_path}'")
     h, w = frame.shape[:2]
 
-    # 3) build planner and dilate obstacle mask
+    # 3) convert polygon obstacles into bounding boxes for planner
+    obs = [{"corners": poly} for poly in polygon_obs]
+
     planner = PathPlanner(obs, (h, w), arena)
     k = 2 * int(spacing) + 1
     kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (k, k))
     planner.mask = cv2.dilate(planner.mask, kernel)
 
     # 4) use the provided list directly
-    # for a in input_target_list:
-    #     print(a)
     targets = [(int(x), int(y)) for x,y in input_target_list]
 
     paths = []
     current = start
     for idx, tgt in enumerate(targets, start=1):
         path = planner.find_obstacle_aware_path(current, tgt, 10)
-        # path = planner.astar_path(current, tgt)
         if not path:
             print(f"Segment {idx}: {current} → {tgt} is UNREACHABLE")
         else:
@@ -57,53 +57,52 @@ def trace_targets(
             paths.append(path)
             current = tgt
 
-    # --- plot & save ---
-    # img_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-    # fig, ax = plt.subplots(figsize=(10, 8))
-    # ax.imshow(img_rgb)
-    # ax.axis("off")
+    # 5) plot & save overlay
+    img_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+    fig, ax = plt.subplots(figsize=(10, 8))
+    ax.imshow(img_rgb)
+    ax.axis("off")
 
-    # # arena boundary
-    # ax.add_patch(Polygon(arena, closed=True, fill=False,
-    #                      edgecolor='yellow', linewidth=2))
+    # arena boundary
+    ax.add_patch(Polygon(arena, closed=True, fill=False,
+                         edgecolor='yellow', linewidth=2))
 
-    # # obstacles
-    # for x, y, w_, h_ in [r["bbox"] for r in obs]:
-    #     ax.add_patch(Rectangle((x, y), w_, h_, facecolor='red', alpha=0.3))
+    # draw polygon obstacles
+    for poly in polygon_obs:
+        ax.add_patch(Polygon(poly, closed=True, facecolor='red', alpha=0.3, edgecolor='white'))
 
-    # # robot start
-    # ax.plot(start[0], start[1], 'o', color='cyan', markersize=10, label='robot')
+    # robot start
+    ax.plot(start[0], start[1], 'o', color='cyan', markersize=10, label='robot')
 
-    # # raw targets
-    # if targets:
-    #     txs, tys = zip(*targets)
-    #     ax.scatter(txs, tys, s=80, facecolors='none',
-    #                edgecolors='white', label='targets')
+    # raw targets
+    if targets:
+        txs, tys = zip(*targets)
+        ax.scatter(txs, tys, s=80, facecolors='none',
+                   edgecolors='white', label='targets')
 
-    # # draw paths
-    # for path in paths:
-    #     xs, ys = zip(*path)
-    #     ax.plot(int(xs), int(ys), '-', linewidth=2, color='lime')
+    # draw paths
+    for path in paths:
+        xs, ys = zip(*path)
+        ax.plot(xs, ys, '-', linewidth=2, color='lime')
 
-    # ax.legend(loc='upper right')
-    # plt.tight_layout()
+    ax.legend(loc='upper right')
+    plt.tight_layout()
+    fig.savefig(out_path, bbox_inches='tight')
+    plt.close(fig)
 
-    # fig.savefig(out_path, bbox_inches='tight')
-    # plt.close(fig)
-
-    # 5) flatten and save
+    # 6) flatten and save
     improved_points = [pt for path in paths for pt in path]
     with open(output_target_path, "w") as f:
         for x, y in improved_points:
             f.write(f"{x},{y}\n")
 
-    return "Path Planned! and saved to {output_target_path}"
+    return f"Path Planned! and saved to {output_target_path}"
+
 
 if __name__ == "__main__":
     DATA_FOLDER  = "Data"
     SPACING      = 20
-    # example list of targets instead of a file
-    input_list = [[205.0, 97.0], [383.0, 31.0]]#[[150,50], [200,80], [350,300]]
+    input_list = [[205.0, 97.0], [383.0, 31.0]]
 
     trace_targets(
         input_target_list=input_list,

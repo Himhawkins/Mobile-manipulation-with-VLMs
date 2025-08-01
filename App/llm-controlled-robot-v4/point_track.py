@@ -10,12 +10,11 @@ from Functions.Library.Agent.load_data import read_data
 
 def point_track(data_folder='Data',
                 output_target_path='Targets/path.txt',
-                spacing=30):
+                spacing=25):
     """
     Launch a CustomTkinter GUI for point selection and path planning.
     Returns a status message upon Save or "User didn't select any points" on close.
     """
-    # --- load data ---
     img_path = os.path.join(data_folder, "frame_img.png")
     frame = cv2.imread(img_path)
     if frame is None:
@@ -25,8 +24,9 @@ def point_track(data_folder='Data',
     data = read_data(data_folder)
     if data is None:
         return f"Error: Could not read data from '{data_folder}'"
+    
     arena = [tuple(map(int, row)) for row in data['arena_corners']]
-    obs = [{"bbox": tuple(map(int, row))} for row in data['obstacles']]
+    obs = [{"corners": [tuple(map(int, pt)) for pt in row]} for row in data['obstacles']]
     sx, sy, _ = data['robot_pos']
     current = (int(sx), int(sy))
 
@@ -48,10 +48,8 @@ def point_track(data_folder='Data',
         approx = cv2.approxPolyDP(large, spacing, True)
         inner_boundary = [tuple(pt[0]) for pt in approx]
 
-    # convert frame for display
     pil = Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
 
-    # state
     points = []
     paths = []
     result_message = None
@@ -60,19 +58,18 @@ def point_track(data_folder='Data',
         def __init__(self):
             super().__init__()
             self.title("Point Selection")
-            # canvas
             self.canvas = tk.Canvas(self, width=w, height=h)
             self.canvas.pack()
             self.tk_img = ImageTk.PhotoImage(pil)
             self.canvas.create_image(0, 0, image=self.tk_img, anchor="nw", tags="bg")
-            # buttons
+
             btn_frame = ctk.CTkFrame(self)
             btn_frame.pack(fill="x", pady=5)
             self.save_btn = ctk.CTkButton(btn_frame, text="Save", command=self.save)
             self.save_btn.pack(side="left", padx=20)
             self.reset_btn = ctk.CTkButton(btn_frame, text="Reset", command=self.reset)
             self.reset_btn.pack(side="right", padx=20)
-            # mouse click
+
             self.canvas.bind("<Button-1>", self.on_click)
             self.draw_overlay()
 
@@ -83,51 +80,56 @@ def point_track(data_folder='Data',
             cv2.polylines(img, [np.array(arena, np.int32)], True, (0,255,255), 2)
             # draw inner boundary
             for i in range(len(inner_boundary)):
-                cv2.line(img,
-                         inner_boundary[i],
-                         inner_boundary[(i+1)%len(inner_boundary)],
+                cv2.line(img, inner_boundary[i], inner_boundary[(i+1)%len(inner_boundary)],
                          (255,255,0), 1, cv2.LINE_AA)
-            # draw obstacles + spacing
-            for x,y,ww,hh in [r['bbox'] for r in obs]:
-                cv2.rectangle(img, (x,y), (x+ww, y+hh), (0,0,255), -1)
+
+            # draw polygonal obstacles + spacing visualization
+            for obs_poly in obs:
+                corners = np.array(obs_poly['corners'], dtype=np.int32)
+                cv2.fillPoly(img, [corners], (0,0,255))
+
+                # draw dotted spacing box around polygon's bbox for visual feedback
+                x, y, w_box, h_box = cv2.boundingRect(corners)
                 tl = (x - spacing, y - spacing)
-                br = (x + ww + spacing, y + hh + spacing)
+                br = (x + w_box + spacing, y + h_box + spacing)
                 for dx in range(tl[0], br[0], 10):
                     cv2.line(img, (dx, tl[1]), (dx+5, tl[1]), (0,255,255), 1)
                     cv2.line(img, (dx, br[1]), (dx+5, br[1]), (0,255,255), 1)
                 for dy in range(tl[1], br[1], 10):
                     cv2.line(img, (tl[0], dy), (tl[0], dy+5), (0,255,255), 1)
                     cv2.line(img, (br[0], dy), (br[0], dy+5), (0,255,255), 1)
-            # draw paths
+
+            # draw path lines
             for path in paths:
-                for (x1,y1),(x2,y2) in zip(path, path[1:]):
+                for (x1, y1), (x2, y2) in zip(path, path[1:]):
                     cv2.line(img, (int(x1), int(y1)), (int(x2), int(y2)), (0,255,0), 2)
-            # draw robot & points
+
+            # draw current position & points
             cv2.circle(img, current, 6, (255,255,0), -1)
-            for px,py in points:
-                cv2.circle(img, (px,py), 5, (255,255,255), -1)
-            self.overlay = ImageTk.PhotoImage(
-                Image.fromarray(cv2.cvtColor(img, cv2.COLOR_BGR2RGB)))
+            for px, py in points:
+                cv2.circle(img, (px, py), 5, (255,255,255), -1)
+
+            self.overlay = ImageTk.PhotoImage(Image.fromarray(cv2.cvtColor(img, cv2.COLOR_BGR2RGB)))
             self.canvas.create_image(0, 0, image=self.overlay, anchor="nw", tags="overlay")
 
         def on_click(self, event):
             nonlocal points, paths, current
             x, y = event.x, event.y
-            segment = planner.find_obstacle_aware_path(current, (x,y), 10)
+            segment = planner.find_obstacle_aware_path(current, (x, y), 10)
             if segment:
-                points.append((x,y))
+                points.append((x, y))
                 paths.append(segment)
-                current = (x,y)
+                current = (x, y)
             else:
-                print(f"Unable to reach {(x,y)} from {current}")
+                print(f"⚠️ Unable to reach {(x, y)} from {current}")
             self.draw_overlay()
 
         def save(self):
             nonlocal result_message
             with open(output_target_path, 'w') as f:
-                for p in paths:
-                    for ux,uy in p:
-                        f.write(f"{int(ux)},{int(uy)}\n")
+                for path in paths:
+                    for px, py in path:
+                        f.write(f"{int(px)},{int(py)}\n")
             result_message = f"Path Planned! and saved to {output_target_path}"
             self.destroy()
 
@@ -140,7 +142,6 @@ def point_track(data_folder='Data',
 
     app = App()
     app.mainloop()
-
     return result_message or "User didn't select any points"
 
 

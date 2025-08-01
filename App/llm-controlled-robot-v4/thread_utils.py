@@ -2,7 +2,7 @@ import threading
 import customtkinter as ctk
 
 from ui_utils import CTkMessageBox, get_app_settings
-from detection import detect_arena, detect_and_get_bbox, save_img_to_path
+from detection import detect_arena, detect_and_get_bbox, detect_obstacles, save_img_to_path
 from Functions.Library.Agent.gemini import call_gemini_agent
 from controller import exec_bot_with_thread
 from motion import move_robot_with_thread
@@ -53,7 +53,8 @@ def callibrate_task(app):
         return False
 
     try:
-        detect_and_get_bbox(img_path="Data/frame_img.png", prompt=obstacle_prompt, save_path="Data/obstacles.txt")
+        # detect_and_get_bbox(img_path="Data/frame_img.png", prompt=obstacle_prompt, save_path="Data/obstacles.txt")
+        detect_obstacles(img_path="Data/frame_img.png", prompt=obstacle_prompt, save_path="Data/obstacles.txt")
     except Exception as e:
         app.after(0, lambda e=e: CTkMessageBox(app, "Error", str(e), "red"))
         return False

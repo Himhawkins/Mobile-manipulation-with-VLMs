@@ -7,7 +7,7 @@ import argparse
 
 def point_selection(data_folder='Data',
                     output_target_path='Targets/path.txt',
-                    spacing=30):
+                    spacing=25):
     """
     Launch the `Functions.Library.track` module in a detached subprocess,
     ensuring the project root is on PYTHONPATH so that `Functions` can be found.
@@ -58,7 +58,7 @@ if __name__ == '__main__':
         help='File to write the planned path points'
     )
     parser.add_argument(
-        '--spacing', type=int, default=30,
+        '--spacing', type=int, default=25,
         help='Pixel spacing buffer for obstacle dilation'
     )
     args = parser.parse_args()

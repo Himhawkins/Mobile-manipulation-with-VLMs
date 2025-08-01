@@ -56,11 +56,26 @@ def read_data(data_folder="Data"):
             parts = [part for part in line.split(',') if part]
             data['error'] = np.array(list(map(float, parts)))
 
+        # # --- Read Obstacles ---
+        # # Reads each line as an [x, y, width, height] rectangle
+        # with open(obstacles_file, 'r') as f:
+        #     lines = f.readlines()
+        #     data['obstacles'] = np.array([list(map(int, line.strip().split(','))) for line in lines])
+
         # --- Read Obstacles ---
-        # Reads each line as an [x, y, width, height] rectangle
+        # Reads each line as 4 corner coordinates: (x1,y1),(x2,y2),(x3,y3),(x4,y4)
         with open(obstacles_file, 'r') as f:
             lines = f.readlines()
-            data['obstacles'] = np.array([list(map(int, line.strip().split(','))) for line in lines])
+            parsed_obstacles = []
+            for line in lines:
+                line = line.strip().replace("(", "").replace(")", "")  # Remove parens
+                parts = list(map(int, line.split(',')))
+                if len(parts) != 8:
+                    raise ValueError(f"Expected 4 corner points per obstacle, got: {parts}")
+                corners = [(parts[i], parts[i+1]) for i in range(0, 8, 2)]
+                parsed_obstacles.append(corners)
+            data['obstacles'] = np.array(parsed_obstacles, dtype=int)  # Shape: (N, 4, 2)
+
 
         # --- Read Robot Position ---
         # Reads the single line for [x, y, theta]
