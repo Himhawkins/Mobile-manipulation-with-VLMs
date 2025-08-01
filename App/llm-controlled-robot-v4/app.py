@@ -279,7 +279,7 @@ class DashboardApp(ctk.CTk):
         ctk.CTkEntry(self.edit_popup, textvariable=name_var).pack(fill="x", padx=10, pady=5)
 
         ctk.CTkLabel(self.edit_popup, text="Description:").pack(anchor="w", padx=10, pady=(10,0))
-        desc_box = ctk.CTkTextbox(self.edit_popup, height=350)
+        desc_box = ctk.CTkTextbox(self.edit_popup, height=250)
         desc_box.pack(fill="both", padx=10, pady=5)
         desc_path = os.path.join("Agents", old_folder, "description.txt")
         try:
