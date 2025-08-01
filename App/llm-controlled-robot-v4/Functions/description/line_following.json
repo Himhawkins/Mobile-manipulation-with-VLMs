@@ -1,0 +1,20 @@
+[
+  {
+    "name": "detect_center_line_and_save",
+    "description": "After warping an image, thresholds the orange line via HSV, performs morphological closing and skeletonization, uniformly samples a specified number of centerline points, saves them to a targets file, and calls trace_targets to overlay and display those sampled points. \n\nExample Usage: 'detect_center_line_and_save(image_path='Data/frame_img.png', num_points=40.0)'",
+    "parameters": {
+      "type": "OBJECT",
+      "properties": {
+        "image_path": {
+          "type": "STRING",
+          "description": "Path to the warped input image file."
+        },
+        "num_points": {
+          "type": "INTEGER",
+          "description": "Number of centerline points to sample along the skeleton."
+        }
+      },
+      "required": []
+    }
+  }
+]
