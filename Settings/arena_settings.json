@@ -1,0 +1,52 @@
+{
+  "rows": 1,
+  "cols": 2,
+  "cells": {
+    "0,0": {
+      "camera": 4,
+      "width": 600,
+      "height": 900,
+      "rotation": 0,
+      "overlap": 200,
+      "topLeft": [
+        216,
+        121
+      ],
+      "topRight": [
+        414,
+        137
+      ],
+      "bottomLeft": [
+        106,
+        412
+      ],
+      "bottomRight": [
+        356,
+        449
+      ]
+    },
+    "0,1": {
+      "camera": 2,
+      "width": 600,
+      "height": 900,
+      "rotation": 180,
+      "overlap": 200,
+      "topLeft": [
+        419,
+        265
+      ],
+      "topRight": [
+        603,
+        273
+      ],
+      "bottomLeft": [
+        408,
+        547
+      ],
+      "bottomRight": [
+        597,
+        557
+      ]
+    }
+  }
+}

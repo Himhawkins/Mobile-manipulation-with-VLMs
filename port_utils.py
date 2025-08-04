@@ -3,7 +3,7 @@ import json
 import cv2
 import serial.tools.list_ports
 
-def refresh_cameras(max_index=15, current_index=None):
+def refresh_cameras(max_index=10, current_index=None):
     """
     Returns a list of camera labels like ['Camera 0', 'Camera 2'],
     including the currently active camera even if it appears busy.
@@ -23,8 +23,6 @@ def refresh_cameras(max_index=15, current_index=None):
         cap.release()
         if ret:
             working.append(f"Camera {i}")
-
-    return working
 
     return working
 
