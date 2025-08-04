@@ -1,0 +1,10 @@
+[
+    {
+        "library": "detection",
+        "name": "detect_objects"
+    },
+    {
+        "library": "planning",
+        "name": "trace_targets"
+    }
+]
