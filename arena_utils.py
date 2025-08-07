@@ -70,17 +70,32 @@ def safe_grab_set(window):
     window.after(200, try_grab)
 
 def warp_arena_frame(frame, cell_key="0,0"):
+    """
+    Warps a frame to show a "zoomed-out" view with a 20px expanded border
+    using information from the original image.
+    """
     arena_settings = load_arena_settings()
     cell = arena_settings.get("cells", {}).get(cell_key, None)
     if cell is None:
         raise ValueError(f"No cell configuration found for {cell_key}")
 
+    # Define the pixel amount for the expanded view on each side
+    # output_content_overlap = 30
+
     REF_WIDTH = 800
     REF_HEIGHT = 600
     rotation = cell.get("rotation", 0)
-    output_width = int(cell.get("width", 800) / 2)
-    output_height = int(cell.get("height", 600) / 2)
 
+    # These are the dimensions for the primary *content* area in the final output
+    output_content_width = int(cell.get("width", 800))
+    output_content_height = int(cell.get("height", 600))
+    output_content_overlap = int(cell.get("overlap", 0))
+
+    # Calculate the total dimensions of the final expanded frame
+    final_width = output_content_width + 2 * output_content_overlap
+    final_height = output_content_height + 2 * output_content_overlap
+
+    # Source points from the camera feed (relative to the REF_WIDTH/HEIGHT)
     src_pts = np.array([
         cell.get("topLeft", [0, 0]),
         cell.get("topRight", [0, 0]),
@@ -88,30 +103,82 @@ def warp_arena_frame(frame, cell_key="0,0"):
         cell.get("bottomLeft", [0, 0])
     ], dtype=np.float32)
 
+    # --- Pre-processing Step (same as before) ---
+    # Resize input to a consistent reference size and apply rotation
+    processed_frame = cv2.resize(frame, (REF_WIDTH, REF_HEIGHT))
+    if rotation == 90:
+        processed_frame = cv2.rotate(processed_frame, cv2.ROTATE_90_CLOCKWISE)
+    elif rotation == 180:
+        processed_frame = cv2.rotate(processed_frame, cv2.ROTATE_180)
+    elif rotation == 270:
+        processed_frame = cv2.rotate(processed_frame, cv2.ROTATE_90_COUNTERCLOCKWISE)
+
+    # --- New Warping Logic ---
+    # The destination points are now the corners of the *content area* within
+    # the final, larger output frame. We are mapping the source corners
+    # to a rectangle inset by output_content_overlap.
     dst_pts = np.array([
-        [0, 0],
-        [REF_WIDTH - 1, 0],
-        [REF_WIDTH - 1, REF_HEIGHT - 1],
-        [0, REF_HEIGHT - 1]
+        [output_content_overlap, output_content_overlap],
+        [final_width - 1 - output_content_overlap, output_content_overlap],
+        [final_width - 1 - output_content_overlap, final_height - 1 - output_content_overlap],
+        [output_content_overlap, final_height - 1 - output_content_overlap]
     ], dtype=np.float32)
 
-    # Perspective warp
-    frame = cv2.resize(frame, (REF_WIDTH, REF_HEIGHT))
-    # Apply rotation
-    if rotation == 90:
-        frame = cv2.rotate(frame, cv2.ROTATE_90_CLOCKWISE)
-    elif rotation == 180:
-        frame = cv2.rotate(frame, cv2.ROTATE_180)
-    elif rotation == 270:
-        frame = cv2.rotate(frame, cv2.ROTATE_90_COUNTERCLOCKWISE)
+    # Get the matrix that maps from the source corners to the inset destination
     matrix = cv2.getPerspectiveTransform(src_pts, dst_pts)
-    warped = cv2.warpPerspective(frame, matrix, (REF_WIDTH, REF_HEIGHT))
+
+    # Warp the frame directly to the final, larger dimensions.
+    # OpenCV fills the expanded border by continuing the perspective transform.
+    expanded_frame = cv2.warpPerspective(
+        processed_frame,
+        matrix,
+        (final_width, final_height)
+    )
+
+    return expanded_frame
+
+# def warp_arena_frame(frame, cell_key="0,0"):
+#     arena_settings = load_arena_settings()
+#     cell = arena_settings.get("cells", {}).get(cell_key, None)
+#     if cell is None:
+#         raise ValueError(f"No cell configuration found for {cell_key}")
+
+#     REF_WIDTH = 800
+#     REF_HEIGHT = 600
+#     rotation = cell.get("rotation", 0)
+#     output_width = int(cell.get("width", 800) / 2)
+#     output_height = int(cell.get("height", 600) / 2)
+
+#     src_pts = np.array([
+#         cell.get("topLeft", [0, 0]),
+#         cell.get("topRight", [0, 0]),
+#         cell.get("bottomRight", [0, 0]),
+#         cell.get("bottomLeft", [0, 0])
+#     ], dtype=np.float32)
+
+#     dst_pts = np.array([
+#         [0, 0],
+#         [REF_WIDTH - 1, 0],
+#         [REF_WIDTH - 1, REF_HEIGHT - 1],
+#         [0, REF_HEIGHT - 1]
+#     ], dtype=np.float32)
+
+#     # Perspective warp
+#     frame = cv2.resize(frame, (REF_WIDTH, REF_HEIGHT))
+#     # Apply rotation
+#     if rotation == 90:
+#         frame = cv2.rotate(frame, cv2.ROTATE_90_CLOCKWISE)
+#     elif rotation == 180:
+#         frame = cv2.rotate(frame, cv2.ROTATE_180)
+#     elif rotation == 270:
+#         frame = cv2.rotate(frame, cv2.ROTATE_90_COUNTERCLOCKWISE)
+#     matrix = cv2.getPerspectiveTransform(src_pts, dst_pts)
+#     warped = cv2.warpPerspective(frame, matrix, (REF_WIDTH, REF_HEIGHT))
 
 
-    # Final resize to output dimensions
-    warped = cv2.resize(warped, (output_width, output_height))
-    return warped
-
+#     # Final resize to output dimensions
+#     warped = cv2.resize(warped, (output_width, output_height))
+#     return warped
 
 def launch_grid_popup(parent_app, camera_options):
     popup = ctk.CTkToplevel(parent_app)
@@ -464,7 +531,7 @@ def open_cell_config_popup(parent, row, col, camera_options):
     show_frame()
 
     # 4. Save/Cancel
-    def save_settings_only():
+    def save_settings_and_close():
         try:
 
             # Read UI values
@@ -499,6 +566,12 @@ def open_cell_config_popup(parent, row, col, camera_options):
 
         except Exception as e:
             print(f"[Save Error] {e}")
+        
+        finally:
+            should_stream[0] = False
+            if cap[0]:
+                cap[0].release()
+            cam_popup.destroy()
 
 
     def cancel_and_close():
@@ -518,7 +591,7 @@ def open_cell_config_popup(parent, row, col, camera_options):
     button_row = ctk.CTkFrame(cam_popup)
     button_row.pack(pady=15)
 
-    ctk.CTkButton(button_row, text="Save", command=save_settings_only).pack(side="left", padx=15)
+    ctk.CTkButton(button_row, text="Save", command=save_settings_and_close).pack(side="left", padx=15)
     ctk.CTkButton(button_row, text="Cancel", command=cancel_and_close).pack(side="right", padx=15)
 
 if __name__ == "__main__":
