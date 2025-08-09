@@ -11,7 +11,7 @@ import argparse
 
 def point_track(data_folder='Data',
                 output_target_path='Targets/path.txt',
-                spacing=25):
+                spacing=50):
     """
     Launch a CustomTkinter GUI for point selection and path planning.
     Returns a status message upon Save or "User didn't select any points" on close.

@@ -1,23 +1,8 @@
 import cv2
 import numpy as np
-import json
+from arena_utils import warp_arena_frame, warp_arena_frame_extended, load_arena_settings, open_all_cameras
 
-from regex import sub
-from arena_utils import warp_arena_frame, load_arena_settings
-
-overlap = 0
-
-def open_all_cameras(settings):
-    caps = {}
-    for cell_key, cell in settings["cells"].items():
-        cam_id = int(cell["camera"])
-        if cam_id not in caps:
-            cap = cv2.VideoCapture(cam_id)
-            if cap.isOpened():
-                caps[cam_id] = cap
-            else:
-                print(f"Failed to open camera {cam_id}")
-    return caps
+current_overlap = 0
 
 def get_frame_from_camera(caps, cam_id):
     cap = caps.get(cam_id)
@@ -88,110 +73,146 @@ def draw_inset_dashed_border(frame, offset):
     return drawn_frame
 
 def stitch_arena(settings, caps):
-    global overlap
+    global current_overlap
     rows = settings["rows"]
     cols = settings["cols"]
-    full_rows = []  # This list will still be used to create the final stitched image
+    full_rows = []
     
-    # 1. Initialize the new list of lists to hold the individual images
     grid_of_images = []
-    subgrid_images = []
 
     for r in range(rows):
         row_images = []
+        sub_grid = []
         for c in range(cols):
             key = f"{r},{c}"
             cell = settings["cells"].get(key)
-            overlap = int(cell.get("overlap", 0))
+            current_overlap = int(cell.get("overlap", 0))
 
-            if not cell:
-                print(f"[WARN] No config for cell {key}. Using blank image.")
-                width = int(settings.get("default_width", 640))
-                height = int(settings.get("default_height", 480))
-                blank = np.zeros((height, width, 3), dtype=np.uint8)
-                row_images.append(blank)
-                continue
-
+            # ... (logic to get 'warped' image) ...
             cam_id = int(cell.get("camera", -1))
             raw_frame = get_frame_from_camera(caps, cam_id)
-
             if raw_frame is not None:
+                warped_ex = warp_arena_frame_extended(raw_frame, cell_key=key)
                 warped = warp_arena_frame(raw_frame, cell_key=key)
             else:
-                print(f"[WARN] Camera {cam_id} unavailable for cell {key}. Using blank image.")
                 width = int(cell.get("width", 640))
                 height = int(cell.get("height", 480))
-                warped = np.zeros((height, width, 3), dtype=np.uint8)
-
-            # warped = draw_inset_dashed_border(warped, overlap)  # Draw dashed border
+                warped_ex = np.zeros((height, width, 3), dtype=np.uint8)
+            
             row_images.append(warped)
-            subgrid_images.append(warped)
+            sub_grid.append(warped_ex)
         
-        grid_of_images.append(subgrid_images)
-        # The existing logic to stitch the full row can remain
+        grid_of_images.append(sub_grid)
+        
         if row_images:
             base_h = row_images[0].shape[0]
-            # Ensure all images in the row have the same height for hstack
             resized_row_images = [cv2.resize(img, (img.shape[1], base_h)) for img in row_images]
             stitched_row = np.hstack(resized_row_images)
             full_rows.append(stitched_row)
 
-    # The existing logic to stack rows vertically can also remain
     if full_rows:
-        # Before stacking, ensure all stitched rows have the same width
         base_w = max(row.shape[1] for row in full_rows)
         resized_full_rows = [cv2.resize(img, (base_w, img.shape[0])) for img in full_rows]
         stitched_full = np.vstack(resized_full_rows)
-        
-        # 3. Return the fully stitched image AND the new grid of images
         return stitched_full, grid_of_images
     else:
-        # Return a consistent type if no images were processed
         return None, []
 
-def detect_robot_pos(frame, overlap, r_idx, c_idx):
+def detect_robot_pos(frame, target_id, overlap, r_idx, c_idx):
+    """
+    Detect a specific ArUco marker and calculate global (x,y) and orientation (theta, radians).
+    Returns (processed_frame, x, y, theta). If not found, x/y/theta are None.
+    """
+    x_coord, y_coord, theta_rad = None, None, None
+
     aruco_dict = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_ARUCO_ORIGINAL)
     params = cv2.aruco.DetectorParameters()
     detector = cv2.aruco.ArucoDetector(aruco_dict, params)
     corners, ids, _ = detector.detectMarkers(frame)
 
-    # --- 3. Process and display the results ---
     if ids is not None:
-        # print(f"Detected {len(ids)} marker(s).")
-        # Loop over the detected ArUco corners
         for i, marker_id in enumerate(ids):
-            # The returned corners object is a list of arrays.
-            # Extract the corners for the current marker.
-            marker_corners = corners[i].reshape((4, 2))
-            
-            # Extract the individual corner points (top-left, top-right, etc.)
-            (topLeft, topRight, bottomRight, bottomLeft) = marker_corners
-            
-            # --- 4. Calculate the center of the marker ---
-            # Calculate the center (x, y)-coordinates of the ArUco marker
-            cX = int((topLeft[0] + bottomRight[0]) / 2.0)
-            cY = int((topLeft[1] + bottomRight[1]) / 2.0)
-            
-            # Calculate the coordinates based on the overlap and row/column indices
-            x_coord = (cX - overlap) + (c_idx * (frame.shape[1] - (2 * overlap)))
-            y_coord = (cY - overlap) + (r_idx * (frame.shape[0] - (2 * overlap)))
+            if marker_id[0] == target_id:
+                marker_corners = corners[i].reshape((4, 2))
+                (topLeft, topRight, bottomRight, bottomLeft) = marker_corners
 
-            print(f"-> Marker ID: {marker_id[0]} | Center Coordinates: ({x_coord}, {y_coord})")
+                # center in the cell image
+                cX = int((topLeft[0] + bottomRight[0]) / 2.0)
+                cY = int((topLeft[1] + bottomRight[1]) / 2.0)
 
-            # --- 5. Draw on the image for verification ---
-            # Draw the bounding box of the ArUco detection
-            cv2.polylines(frame, [marker_corners.astype(int)], True, (0, 255, 0), 2)
-            
-            # Draw the center of the marker
-            cv2.circle(frame, (cX, cY), 4, (0, 0, 255), -1)
+                # global coordinates in the stitched layout (accounting for overlap)
+                x_coord = (cX - overlap) + (c_idx * (frame.shape[1] - (2 * overlap)))
+                y_coord = (cY - overlap) + (r_idx * (frame.shape[0] - (2 * overlap)))
 
-            # Draw the marker ID and coordinates
-            text = f"ID: {marker_id[0]} ({x_coord}, {y_coord})"
-            cv2.putText(frame, text, (int(topLeft[0]), int(topLeft[1]) - 15), 
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 2)
-    # Placeholder for robot detection logic
-    # For now, just return a dummy position
-    return frame
+                # --- orientation (radians), image x points right, y points down ---
+                # Vector along marker's x-axis: topLeft -> topRight
+                v = topRight - topLeft
+                theta_rad = float(np.arctan2(v[1], v[0]))  # in [-pi, pi]
+
+                # Draw
+                cv2.polylines(frame, [marker_corners.astype(int)], True, (0, 255, 0), 2)
+                cv2.circle(frame, (cX, cY), 4, (0, 0, 255), -1)
+
+                # Optional: draw a small heading arrow
+                arrow_len = 40
+                tip = (int(cX + arrow_len * np.cos(theta_rad)),
+                       int(cY + arrow_len * np.sin(theta_rad)))
+                cv2.arrowedLine(frame, (cX, cY), tip, (255, 0, 255), 2, tipLength=0.3)
+
+                text = f"ID:{marker_id[0]} ({x_coord},{y_coord}) θ:{theta_rad:.2f}rad"
+                cv2.putText(frame, text, (int(topLeft[0]), int(topLeft[1]) - 15),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 2)
+                break
+
+    return frame, x_coord, y_coord, theta_rad
+
+def find_robot_in_arena(target_id, settings, caps, save_path=None):
+    global current_overlap
+    stitched_img, image_grid = stitch_arena(settings, caps)
+    if not image_grid:
+        return None, {}, None, None, None
+
+    processed_frames = {}
+    x_coordinates, y_coordinates = [], []
+    thetas = []  # collect per-cell theta
+
+    for r_idx, row_list in enumerate(image_grid):
+        for c_idx, img in enumerate(row_list):
+            processed_img, x_pos, y_pos, theta_rad = detect_robot_pos(
+                img, target_id, current_overlap, r_idx, c_idx
+            )
+
+            if x_pos is not None and y_pos is not None:
+                x_coordinates.append(x_pos)
+                y_coordinates.append(y_pos)
+            if theta_rad is not None:
+                thetas.append(theta_rad)
+
+            processed_img = draw_inset_dashed_border(processed_img, current_overlap)
+            cell_key = f"{r_idx},{c_idx}"
+            processed_frames[cell_key] = processed_img
+
+    final_x = sum(x_coordinates) / len(x_coordinates) if x_coordinates else None
+    final_y = sum(y_coordinates) / len(y_coordinates) if y_coordinates else None
+
+    # Circular mean for orientation (handle wrap-around)
+    rotated_theta = None
+    if thetas:
+        c = np.mean(np.cos(thetas))
+        s = np.mean(np.sin(thetas))
+        final_theta = float(np.arctan2(s, c))  # still in [-pi, pi]
+        # Rotate left by 90° (π/2 radians)
+        rotated_theta = final_theta - np.pi / 2
+        rotated_theta = (rotated_theta + np.pi) % (2 * np.pi) - np.pi  # wrap to [-pi, pi]
+
+    final_pose = (int(final_x), int(final_y), rotated_theta) if final_x is not None and final_y is not None else None
+
+    if save_path is not None:
+        with open(save_path, "w") as f:
+            if final_pose:
+                f.write(f"{int(final_x)},{int(final_y)},{rotated_theta}\n")
+
+    return stitched_img, processed_frames, final_pose
 
 
 # --- Main Loop ---
@@ -203,21 +224,34 @@ if __name__ == "__main__":
         print("No cameras available")
         exit()
 
+    robot_marker_id = 782
+
     try:
         while True:
-            stitched, full_images = stitch_arena(settings, caps)
-            
-            for r_idx, row_list in enumerate(full_images):
-                # 2. The inner loop gets each individual image from the row_list
-                for c_idx, img in enumerate(row_list):
-                    
-                    # Now, 'img' is a single image and your functions will work correctly
-                    processed_img = detect_robot_pos(img, overlap, r_idx, c_idx)
-                    processed_img = draw_inset_dashed_border(processed_img, overlap)
+            stitched, processed_frames, pose = find_robot_in_arena(robot_marker_id, settings, caps)
+            final_x, final_y, final_theta = pose 
 
-                    # Create a unique window name using both row and column index
-                    window_name = f"Cell Image [{r_idx}][{c_idx}]"
-                    cv2.imshow(window_name, processed_img)
+            if final_x is not None and final_y is not None:
+                center_point = (int(final_x), int(final_y))
+                cv2.circle(stitched, center_point, radius=8, color=(0, 0, 255), thickness=-1)
+
+                # Optional heading arrow on the stitched image if theta available
+                if final_theta is not None:
+                    L = 60
+                    tip = (int(final_x + L * np.cos(final_theta)),
+                        int(final_y + L * np.sin(final_theta)))
+                    cv2.arrowedLine(stitched, center_point, tip, (0, 255, 0), 2, tipLength=0.3)
+
+
+                if final_theta is not None:
+                    print(f"Robot Position: ({final_x:.2f}, {final_y:.2f}), θ={final_theta:.3f} rad")
+                else:
+                    print(f"Robot Position: ({final_x:.2f}, {final_y:.2f}), θ=NA")
+            else:
+                print("Robot not detected in any cell.")
+
+            if stitched is not None:
+                cv2.imshow("Stitched Arena", stitched)
 
             key = cv2.waitKey(1) & 0xFF
             if key == 27:

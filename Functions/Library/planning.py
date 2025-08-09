@@ -13,7 +13,7 @@ def trace_targets(
     output_target_path,
     start=None,
     data_folder="Data",
-    spacing=25,
+    spacing=50,
     out_path="Data/trace_overlay.png"
 ):
     # 1) load world

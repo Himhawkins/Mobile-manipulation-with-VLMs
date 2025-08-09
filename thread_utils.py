@@ -39,22 +39,14 @@ def enable_button(btn_name):
     
 def callibrate_task(app):
     app.settings = get_app_settings()
-    corner_prompt = app.settings.get("corner_prompt")
     obstacle_prompt = app.settings.get("obstacle_prompt")
     save_img_to_path(app.current_frame, save_path="Data/frame_img.png")
-    try:
-        detect_arena(img_path="Data/frame_img.png", prompt=corner_prompt, save_path="Data/arena_corners.txt")
-        app.after(0, lambda: CTkMessageBox(app, "Status", "Calibrated successfully", "white"))
-    except ValueError as e:
-        app.after(0, lambda e=e: CTkMessageBox(app, "Detection Error", str(e), "yellow"))
-        return False
-    except Exception as e:
-        app.after(0, lambda e=e: CTkMessageBox(app, "Error", str(e), "red"))
-        return False
 
     try:
         # detect_and_get_bbox(img_path="Data/frame_img.png", prompt=obstacle_prompt, save_path="Data/obstacles.txt")
+        detect_arena(img_path="Data/frame_img.png", save_path="Data/arena_corners.txt")
         detect_obstacles(img_path="Data/frame_img.png", prompt=obstacle_prompt, save_path="Data/obstacles.txt")
+        app.after(0, lambda: CTkMessageBox(app, "Status", "Calibrated successfully", "white"))
     except Exception as e:
         app.after(0, lambda e=e: CTkMessageBox(app, "Error", str(e), "red"))
         return False

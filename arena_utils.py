@@ -56,6 +56,18 @@ def load_arena_settings():
         # fallback if corrupted
         return default_settings
 
+def open_all_cameras(settings):
+    caps = {}
+    for cell_key, cell in settings["cells"].items():
+        cam_id = int(cell["camera"])
+        if cam_id not in caps:
+            cap = cv2.VideoCapture(cam_id)
+            if cap.isOpened():
+                caps[cam_id] = cap
+            else:
+                print(f"Failed to open camera {cam_id}")
+    return caps
+
 def save_arena_settings(settings_dict):
     os.makedirs(os.path.dirname(SETTINGS_PATH), exist_ok=True)
     with open(SETTINGS_PATH, "w") as f:
@@ -69,7 +81,7 @@ def safe_grab_set(window):
             print(f"[Grab Failed] {e}")
     window.after(200, try_grab)
 
-def warp_arena_frame(frame, cell_key="0,0"):
+def warp_arena_frame_extended(frame, cell_key="0,0"):
     """
     Warps a frame to show a "zoomed-out" view with a 20px expanded border
     using information from the original image.
@@ -137,48 +149,48 @@ def warp_arena_frame(frame, cell_key="0,0"):
 
     return expanded_frame
 
-# def warp_arena_frame(frame, cell_key="0,0"):
-#     arena_settings = load_arena_settings()
-#     cell = arena_settings.get("cells", {}).get(cell_key, None)
-#     if cell is None:
-#         raise ValueError(f"No cell configuration found for {cell_key}")
+def warp_arena_frame(frame, cell_key="0,0"):
+    arena_settings = load_arena_settings()
+    cell = arena_settings.get("cells", {}).get(cell_key, None)
+    if cell is None:
+        raise ValueError(f"No cell configuration found for {cell_key}")
 
-#     REF_WIDTH = 800
-#     REF_HEIGHT = 600
-#     rotation = cell.get("rotation", 0)
-#     output_width = int(cell.get("width", 800) / 2)
-#     output_height = int(cell.get("height", 600) / 2)
+    REF_WIDTH = 800
+    REF_HEIGHT = 600
+    rotation = cell.get("rotation", 0)
+    output_width = int(cell.get("width", 800))
+    output_height = int(cell.get("height", 600))
 
-#     src_pts = np.array([
-#         cell.get("topLeft", [0, 0]),
-#         cell.get("topRight", [0, 0]),
-#         cell.get("bottomRight", [0, 0]),
-#         cell.get("bottomLeft", [0, 0])
-#     ], dtype=np.float32)
+    src_pts = np.array([
+        cell.get("topLeft", [0, 0]),
+        cell.get("topRight", [0, 0]),
+        cell.get("bottomRight", [0, 0]),
+        cell.get("bottomLeft", [0, 0])
+    ], dtype=np.float32)
 
-#     dst_pts = np.array([
-#         [0, 0],
-#         [REF_WIDTH - 1, 0],
-#         [REF_WIDTH - 1, REF_HEIGHT - 1],
-#         [0, REF_HEIGHT - 1]
-#     ], dtype=np.float32)
+    dst_pts = np.array([
+        [0, 0],
+        [REF_WIDTH - 1, 0],
+        [REF_WIDTH - 1, REF_HEIGHT - 1],
+        [0, REF_HEIGHT - 1]
+    ], dtype=np.float32)
 
-#     # Perspective warp
-#     frame = cv2.resize(frame, (REF_WIDTH, REF_HEIGHT))
-#     # Apply rotation
-#     if rotation == 90:
-#         frame = cv2.rotate(frame, cv2.ROTATE_90_CLOCKWISE)
-#     elif rotation == 180:
-#         frame = cv2.rotate(frame, cv2.ROTATE_180)
-#     elif rotation == 270:
-#         frame = cv2.rotate(frame, cv2.ROTATE_90_COUNTERCLOCKWISE)
-#     matrix = cv2.getPerspectiveTransform(src_pts, dst_pts)
-#     warped = cv2.warpPerspective(frame, matrix, (REF_WIDTH, REF_HEIGHT))
+    # Perspective warp
+    frame = cv2.resize(frame, (REF_WIDTH, REF_HEIGHT))
+    # Apply rotation
+    if rotation == 90:
+        frame = cv2.rotate(frame, cv2.ROTATE_90_CLOCKWISE)
+    elif rotation == 180:
+        frame = cv2.rotate(frame, cv2.ROTATE_180)
+    elif rotation == 270:
+        frame = cv2.rotate(frame, cv2.ROTATE_90_COUNTERCLOCKWISE)
+    matrix = cv2.getPerspectiveTransform(src_pts, dst_pts)
+    warped = cv2.warpPerspective(frame, matrix, (REF_WIDTH, REF_HEIGHT))
 
 
-#     # Final resize to output dimensions
-#     warped = cv2.resize(warped, (output_width, output_height))
-#     return warped
+    # Final resize to output dimensions
+    warped = cv2.resize(warped, (output_width, output_height))
+    return warped
 
 def launch_grid_popup(parent_app, camera_options):
     popup = ctk.CTkToplevel(parent_app)

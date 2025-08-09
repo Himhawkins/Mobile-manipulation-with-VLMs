@@ -70,7 +70,7 @@ def detect_and_get_bbox(img_path="Data/frame_img.png", prompt="Blue Cricles", sa
     return obstacles
 
 def detect_obstacles(img_path="Data/frame_img.png", prompt="Blue Circles", save_path=None):
-    frame = get_warped_image(img_path, data_folder="Data", settings_path="Settings/settings.json")
+    frame = cv2.imread(img_path)
     objects, _ = detect_and_list(frame, prompt)
 
     # Convert bbox to corner coordinates
@@ -84,46 +84,69 @@ def detect_obstacles(img_path="Data/frame_img.png", prompt="Blue Circles", save_
         ]
         warped_obstacles.append(corners)
 
-    # Flatten all corner points, unwarp them, and group back
-    flat_corners = [pt for obstacle in warped_obstacles for pt in obstacle]
-    unwarped_flat = unwarp_points(flat_corners, data_folder="Data", settings_path="Settings/settings.json")
-    unwarped_obstacles = [unwarped_flat[i:i+4] for i in range(0, len(unwarped_flat), 4)]
-
     # Optionally save
     if save_path is not None:
         with open(save_path, "w") as f:
-            for corners in unwarped_obstacles:
+            for corners in warped_obstacles:
                 line = ",".join(f"({x},{y})" for (x, y) in corners)
                 f.write(line + "\n")
 
-    return unwarped_obstacles
+    return warped_obstacles
 
 
-def detect_arena(img_path="Data/frame_img.png", prompt="Blue Circles", save_path=None):
+# def detect_arena(img_path="Data/frame_img.png", prompt="Blue Circles", save_path=None):
+#     frame = cv2.imread(img_path)
+#     corners, count = detect_and_list(frame, prompt)
+#     centroids = [tuple(o["centroid"]) for o in corners]
+    
+#     if len(centroids) != 4:
+#         raise ValueError(f"Expected 4 markers, but found {len(centroids)}")
+    
+#     # --- sort into UL, LL, LR, UR ---
+#     # 1. sort by y (row): top two first, bottom two last
+#     centroids_sorted = sorted(centroids, key=lambda p: p[1])
+#     top_two    = centroids_sorted[:2]
+#     bottom_two = centroids_sorted[2:]
+#     # 2. within each pair, sort by x (column)
+#     top_left,    top_right    = sorted(top_two,    key=lambda p: p[0])
+#     bottom_left, bottom_right = sorted(bottom_two, key=lambda p: p[0])
+#     ordered = [top_left, bottom_left, bottom_right, top_right]
+#     # ---------------------------------
+    
+#     if save_path:
+#         with open(save_path, "w") as f:
+#             for x, y in ordered:
+#                 f.write(f"{x},{y}\n")
+    
+#     return ordered
+
+def detect_arena(img_path, save_path=None):
+    # 1. Read the image to get its dimensions
     frame = cv2.imread(img_path)
-    corners, count = detect_and_list(frame, prompt)
-    centroids = [tuple(o["centroid"]) for o in corners]
+    if frame is None:
+        raise FileNotFoundError(f"Could not read image at path: {img_path}")
     
-    if len(centroids) != 4:
-        raise ValueError(f"Expected 4 markers, but found {len(centroids)}")
+    # Get height and width from the image's shape
+    height, width = frame.shape[:2]
+
+    # 2. Define the four corner coordinates
+    # Note: Coordinates are in (x, y) format
+    top_left     = (0, 0)
+    top_right    = (width - 1, 0)
+    bottom_left  = (0, height - 1)
+    bottom_right = (width - 1, height - 1)
     
-    # --- sort into UL, LL, LR, UR ---
-    # 1. sort by y (row): top two first, bottom two last
-    centroids_sorted = sorted(centroids, key=lambda p: p[1])
-    top_two    = centroids_sorted[:2]
-    bottom_two = centroids_sorted[2:]
-    # 2. within each pair, sort by x (column)
-    top_left,    top_right    = sorted(top_two,    key=lambda p: p[0])
-    bottom_left, bottom_right = sorted(bottom_two, key=lambda p: p[0])
-    ordered = [top_left, bottom_left, bottom_right, top_right]
-    # ---------------------------------
-    
+    # 3. Arrange the corners in the specified order
+    ordered_corners = [top_left, bottom_left, bottom_right, top_right]
+
+    # 4. Optionally save the ordered corners to the specified file
     if save_path:
+        print(f"Saving frame corners to {save_path}...")
         with open(save_path, "w") as f:
-            for x, y in ordered:
+            for x, y in ordered_corners:
                 f.write(f"{x},{y}\n")
     
-    return ordered
+    return ordered_corners
 
 def detect_objects(img_path="Data/frame_img.png", prompt_list=["A","B","C"], save_path=None):
     frame = cv2.imread(img_path)

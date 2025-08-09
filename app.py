@@ -10,10 +10,12 @@ import threading
 from ui_utils import CTkMessageBox, CheckGroup, get_app_settings, open_settings_popup
 from camera_utils import start_camera, read_frame, display_frame, draw_robot_pose
 from agent_utils import save_agent_to_disk, get_agent_folders, get_agent_functions, get_all_functions
-from port_utils import refresh_cameras, refresh_serial_ports
+from port_utils import refresh_serial_ports
 from detection import detect_robot_pose
 from thread_utils import run_in_thread, disable_button, enable_button, callibrate_task, run_task, toggle_execute
-from ui_utils import overlay_arena_and_obstacles, get_overlay_frame, draw_path_on_frame
+from ui_utils import overlay_obstacles, get_overlay_frame, draw_path_on_frame
+from arena_utils import refresh_cameras, launch_grid_popup, load_arena_settings, open_all_cameras
+from arena_stitching import find_robot_in_arena
 
 class DashboardApp(ctk.CTk):
     def __init__(self):
@@ -29,25 +31,10 @@ class DashboardApp(ctk.CTk):
         # Top Section
         top_frame = ctk.CTkFrame(self)
         top_frame.grid(row=0, column=0, sticky="nsew", padx=10, pady=(10, 5))
-        top_frame.grid_columnconfigure((0, 1, 2), weight=1)
-
-        cam_frame = ctk.CTkFrame(top_frame)
-        cam_frame.grid(row=0, column=0, sticky="w", padx=5)
-        cam_frame.grid_columnconfigure((0,1), weight=1)
-        init_camera_list = refresh_cameras()
-        self.camera_var = ctk.StringVar(value=init_camera_list[0] if init_camera_list else "")
-        self.camera_menu = ctk.CTkOptionMenu(
-            cam_frame,
-            variable=self.camera_var,
-            values=init_camera_list,
-            command=self.on_camera_change
-        )
-        self.camera_menu.grid(row=0, column=0, sticky="w")
-        ctk.CTkButton(cam_frame, text="Refresh Cameras", command=self.on_refresh_cameras)\
-            .grid(row=0, column=1, padx=(5,0))
+        top_frame.grid_columnconfigure((0, 1), weight=1)
 
         port_frame = ctk.CTkFrame(top_frame)
-        port_frame.grid(row=0, column=1, padx=(5,150))
+        port_frame.grid(row=0, column=0, sticky="w", padx=5)
         init_serial_list = refresh_serial_ports()
         self.serial_var = ctk.StringVar(value=init_serial_list[0] if init_serial_list else "")
         self.serial_menu = ctk.CTkOptionMenu(
@@ -58,7 +45,10 @@ class DashboardApp(ctk.CTk):
         )
         self.serial_menu.grid(row=0, column=0)
         ctk.CTkButton(port_frame, text="Refresh Ports", command=self.on_refresh_ports)\
-            .grid(row=0, column=1, padx=(5,0))
+            .grid(row=0, column=1, padx=5)
+
+        ctk.CTkButton(top_frame, text="Arena Configuration", command=self.on_arena_config)\
+            .grid(row=0, column=1, sticky="e", padx=5)
 
         ctk.CTkButton(top_frame, text="Settings", command=self.on_settings)\
             .grid(row=0, column=2, sticky="e", padx=5)
@@ -71,29 +61,15 @@ class DashboardApp(ctk.CTk):
         middle_frame.grid_rowconfigure((0,1), weight=1)
 
         self.video_frame = ctk.CTkFrame(middle_frame, border_width=2, corner_radius=10)
-        self.video_frame.grid(row=0, column=0, rowspan=2, sticky="nsew", padx=(10,5), pady=10)
+        self.video_frame.grid(row=0, column=0, sticky="nsew", padx=(10,5), pady=10)
         self.video_label = ctk.CTkLabel(self.video_frame, text="", fg_color="black", corner_radius=10)
         self.video_label.pack(expand=True, fill="both")
 
         self.cap = None
-        self.after(500, lambda: self.on_camera_change(self.camera_var.get()))
 
-        self.preview1_txt = ctk.CTkTextbox(
-            middle_frame,
-            width=700,
-            border_width=1,
-            corner_radius=8,
-            state="disabled"
-        )
+        self.preview1_txt = ctk.CTkTextbox(middle_frame, width=700, border_width=1, corner_radius=8, state="disabled")
         self.preview1_txt.grid(row=0, column=1, sticky="nsew", pady=(10,5), padx=(5,10))
-        self.preview1_txt.grid_propagate(False)
-
-        self.preview2 = ctk.CTkFrame(middle_frame, width=700, border_width=1, corner_radius=8)
-        self.preview2.grid(row=1, column=1, sticky="nsew", pady=(5,10), padx=(5,10))
-        self.preview2.grid_propagate(False)
-
-        self.preview2_img_label = ctk.CTkLabel(self.preview2, text="")
-        self.preview2_img_label.pack(expand=True, fill="both")
+        # self.preview1_txt.grid_propagate(False)
 
         # Bottom Section
         bottom_frame = ctk.CTkFrame(self)
@@ -155,24 +131,16 @@ class DashboardApp(ctk.CTk):
         self.move_thread = None
         self.stop_event = threading.Event()
 
-    def on_camera_change(self, value):
-        m = re.search(r"\d+", value)
-        if not m:
-            print(f"Could not parse camera index from '{value}'")
-            return
-        cam_index = int(m.group())
+        self.current_frame = None
+        self.arena_settings = load_arena_settings()
+        self.caps = open_all_cameras(self.arena_settings)
 
-        if self.cap:
-            self.cap.release()
-
-        self.cap = start_camera(cam_index)
-        if not self.cap:
-            print(f"Failed to open camera {cam_index}")
-            return
         self.on_update_video()
 
-    def on_update_video(self):
-        if not self.cap or not self.cap.isOpened():
+
+    def on_update_video(self):        
+        if not self.caps:
+            print("No cameras available")
             return
 
         self.update_idletasks()
@@ -180,27 +148,19 @@ class DashboardApp(ctk.CTk):
         ch = self.video_frame.winfo_height()
         if cw < 2 or ch < 2:
             return self.after(16, self.on_update_video)
-
-        self.current_frame = read_frame(self.cap)
+        
         self.settings = get_app_settings()
         aruco_id = int(self.settings.get("aruco_id", "782"))
-        pose = detect_robot_pose(
-            frame=self.current_frame,
-            aruco_id=aruco_id,
-            save_path="Data/robot_pos.txt"
-        )
 
+        stitched, processed_frames, pose = find_robot_in_arena(aruco_id, self.arena_settings, self.caps, save_path="Data/robot_pos.txt")
+        self.current_frame = stitched
         if pose:
-            cx, cy, theta, pts = pose
-            d_frame = draw_robot_pose(self.current_frame, cx, cy, theta, pts)
+            final_x, final_y, final_theta = pose
+            d_frame = draw_robot_pose(stitched, final_x, final_y, final_theta)
         else:
-            d_frame = self.current_frame
-        
-        overlay = overlay_arena_and_obstacles(
-                frame=d_frame,
-                arena_path="Data/arena_corners.txt",
-                obstacles_path="Data/obstacles.txt"
-            )
+            d_frame = stitched
+
+        overlay = overlay_obstacles(frame=d_frame, obstacles_path="Data/obstacles.txt")
         draw_frame = draw_path_on_frame(overlay, path_file="Targets/path.txt")
 
         img = display_frame(frame=draw_frame, target_w=cw, target_h=ch)
@@ -208,22 +168,7 @@ class DashboardApp(ctk.CTk):
             self.video_label.configure(image=img)
             self.video_label.image = img
 
-        # preview2: warped top-down arena
-        width = int(self.settings.get("arena_width", "1200"))
-        height = int(self.settings.get("arena_height", "900"))
-        warped = get_overlay_frame(warp_size=(width, height))
-        preview_img = display_frame(warped, width//2, height//2)
-        if preview_img:
-            self.preview2_img_label.configure(image=preview_img)
-            self.preview2_img_label.image = preview_img
-
         self.after(16, self.on_update_video)
-
-    def on_refresh_cameras(self):
-        vals = refresh_cameras()
-        self.camera_menu.configure(values=vals)
-        if vals:
-            self.camera_var.set(vals[0])
 
     def on_serial_change(self, value):
         pass
@@ -233,6 +178,13 @@ class DashboardApp(ctk.CTk):
         self.serial_menu.configure(values=vals)
         if vals:
             self.serial_var.set(vals[0])
+
+    def on_arena_config(self):
+        if getattr(self, "arena_popup", None) and self.arena_popup.winfo_exists():
+            self.arena_popup.lift()
+            self.arena_popup.focus_force()
+            return
+        launch_grid_popup(app, refresh_cameras())
 
     def on_settings(self):
         if getattr(self, "settings_popup", None) and self.settings_popup.winfo_exists():
