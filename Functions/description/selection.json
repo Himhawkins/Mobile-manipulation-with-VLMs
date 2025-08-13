@@ -15,7 +15,7 @@
         },
         "spacing": {
           "type": "NUMBER",
-          "description": "Number of pixels to inflate obstacles outward and erode the arena boundary inward. Defaults to 20."
+          "description": "Number of pixels to inflate obstacles outward and erode the arena boundary inward. Defaults to 35."
         }
       },
       "required": []
