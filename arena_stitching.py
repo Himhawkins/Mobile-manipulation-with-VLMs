@@ -88,17 +88,24 @@ def stitch_arena(settings, caps):
             cell = settings["cells"].get(key)
             current_overlap = int(cell.get("overlap", 0))
 
-            # ... (logic to get 'warped' image) ...
             cam_id = int(cell.get("camera", -1))
+            width = int(cell.get("width", 640))
+            height = int(cell.get("height", 480))
+
+            # Default black images so 'warped' and 'warped_ex' always exist
+            warped = np.zeros((height, width, 3), dtype=np.uint8)
+            warped_ex = np.zeros((height, width, 3), dtype=np.uint8)
+
             raw_frame = get_frame_from_camera(caps, cam_id)
             if raw_frame is not None:
                 warped_ex = warp_arena_frame_extended(raw_frame, cell_key=key)
                 warped = warp_arena_frame(raw_frame, cell_key=key)
             else:
-                width = int(cell.get("width", 640))
-                height = int(cell.get("height", 480))
-                warped_ex = np.zeros((height, width, 3), dtype=np.uint8)
-            
+                print(f"[WARN] Camera {cam_id} failed to grab a frame, removing from caps.")
+                if cam_id in caps:
+                    caps[cam_id].release()
+                    del caps[cam_id]
+
             row_images.append(warped)
             sub_grid.append(warped_ex)
         
@@ -117,6 +124,7 @@ def stitch_arena(settings, caps):
         return stitched_full, grid_of_images
     else:
         return None, []
+
 
 def detect_robot_pos(frame, target_id, overlap, r_idx, c_idx):
     """
@@ -260,7 +268,7 @@ if __name__ == "__main__":
             for key, frame in processed_frames_list.items():
                 cv2.imshow(f"Cell {key}", frame)
 
-            key = cv2.waitKey(1) & 0xFF
+            key = cv2.waitKey(10) & 0xFF
             if key == 27:
                 break
     finally:

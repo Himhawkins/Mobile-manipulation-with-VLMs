@@ -24,7 +24,7 @@ def refresh_cameras(max_index=10, current_index=None):
             # Current camera is already open and working
             working.append(f"{i}")
             continue
-        cap = cv2.VideoCapture(i)
+        cap = cv2.VideoCapture(i, cv2.CAP_V4L2)
         ret, _ = cap.read()
         cap.release()
         if ret:
@@ -56,59 +56,119 @@ def load_arena_settings():
         # fallback if corrupted
         return default_settings
 
-def open_all_cameras(settings, test_read=True, warmup_frames=0):
+def open_all_cameras(
+    settings,
+    test_read=True,
+    warmup_frames=3,
+    width=640,
+    height=480,
+    fps=15,
+    retries=3,
+    reopen_once=True
+):
+    """
+    Opens only the camera IDs referenced by the active grid in `settings`.
+    Uses MJPEG to reduce bandwidth, enforces width/height/fps, and performs
+    warm-up + retries so multi-cam (3+) setups are more reliable.
+
+    Returns:
+        caps: dict[int, cv2.VideoCapture]
+    """
     rows = int(settings.get("rows", 0))
     cols = int(settings.get("cols", 0))
     cells = settings.get("cells", {})
 
-    caps = {}
-    needed_camera_ids = set()
+    def _open_cam(cam_id):
+        cap = cv2.VideoCapture(cam_id, cv2.CAP_V4L2)
+
+        # Prefer MJPEG (compressed) to reduce USB bandwidth pressure.
+        # Not all cameras honor this, but setting it won't hurt.
+        try:
+            fourcc = cv2.VideoWriter_fourcc(*'MJPG')
+            cap.set(cv2.CAP_PROP_FOURCC, fourcc)
+        except Exception:
+            pass
+
+        # Target resolution & FPS (many cams clamp to nearest supported values)
+        cap.set(cv2.CAP_PROP_FRAME_WIDTH,  width)
+        cap.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
+        cap.set(cv2.CAP_PROP_FPS,          fps)
+
+        # Keep buffer tiny to avoid lag (may be ignored by some drivers)
+        try:
+            cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+        except Exception:
+            pass
+
+        return cap
+
+    def _try_read(cap, attempts=3, sleep_s=0.02):
+        """Try a few reads to confirm frames are flowing."""
+        ok = False
+        for _ in range(attempts):
+            ret, _ = cap.read()
+            if ret:
+                ok = True
+                break
+            time.sleep(sleep_s)
+        return ok
 
     # Collect only the cameras referenced by the active grid
+    needed_camera_ids = set()
     for r in range(rows):
         for c in range(cols):
             key = f"{r},{c}"
             cell = cells.get(key)
-            if not cell:
-                # You can log a warning if a cell is missing:
-                # print(f"[WARN] No config for cell {key}; skipping.")
-                continue
-            if "camera" not in cell:
-                # print(f"[WARN] Cell {key} has no 'camera' field; skipping.")
+            if not cell or "camera" not in cell:
                 continue
             try:
                 cam_id = int(cell["camera"])
             except (TypeError, ValueError):
-                # print(f"[WARN] Invalid camera id in cell {key}: {cell['camera']}")
                 continue
             needed_camera_ids.add(cam_id)
 
-    # Open each required camera once
+    caps = {}
     for cam_id in sorted(needed_camera_ids):
-        cap = cv2.VideoCapture(cam_id)
-        if not cap.isOpened():
-            print(f"Failed to open camera {cam_id}")
-            continue
+        cap = None
+        opened = False
 
-        # Optional: test a read
-        ok = True
-        if test_read:
-            ret, _ = cap.read()
-            if not ret:
-                print(f"Camera {cam_id} opened but failed to read a frame; releasing.")
+        for attempt in range(retries):
+            # First open
+            cap = _open_cam(cam_id)
+            if not cap.isOpened():
+                if cap is not None:
+                    cap.release()
+                time.sleep(0.05)
+                continue
+
+            # Optional test read
+            ok = True
+            if test_read:
+                ok = _try_read(cap, attempts=3)
+                # If initial reads failed, try one explicit reopen (often fixes V4L2 timeouts)
+                if not ok and reopen_once:
+                    cap.release()
+                    time.sleep(0.05)
+                    cap = _open_cam(cam_id)
+                    if cap.isOpened():
+                        ok = _try_read(cap, attempts=3)
+
+            if ok:
+                # Warm-up frames (flush the pipeline so downstream .read() is instant)
+                for _ in range(max(0, warmup_frames)):
+                    cap.read()
+                caps[cam_id] = cap
+                opened = True
+                break
+            else:
                 cap.release()
-                ok = False
+                time.sleep(0.05)
 
-        # Optional: warm up by grabbing a few frames
-        if ok and warmup_frames > 0:
-            for _ in range(warmup_frames):
-                cap.read()
+        if not opened:
+            print(f"[WARN] Camera {cam_id}: unable to deliver frames after {retries} attempt(s). Skipping.")
 
-        if ok:
-            caps[cam_id] = cap
-
-    # Optional: note any cells outside the active grid (ignored)
-    # This helps catch config drift.
+    # Optionally: note any cells outside active grid (ignored)
+    # (kept from your original for config sanity)
     for key in cells.keys():
         try:
             r, c = map(int, key.split(","))
@@ -589,7 +649,7 @@ def open_cell_config_popup(parent, row, col, camera_options):
                 cap[0].release()
             # Extract number from 'Camera 0', 'Camera 2', etc.
             cam_index = int(selected_cam.get().split()[-1])
-            cap[0] = cv2.VideoCapture(cam_index)
+            cap[0] = cv2.VideoCapture(cam_index, cv2.CAP_V4L2)
         except Exception as e:
             print(f"Camera error: {e}")
 

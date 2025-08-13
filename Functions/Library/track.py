@@ -34,6 +34,8 @@ def point_track(data_folder='Data',
     sx, sy, _ = data['robot_pos']
     current = (int(sx), int(sy))
 
+    spacing = int(spacing)
+
     # build planner
     planner = PathPlanner(obs, (h, w), arena)
     k = 2 * spacing + 1
