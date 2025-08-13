@@ -140,8 +140,7 @@ class DashboardApp(ctk.CTk):
 
     def on_update_video(self):        
         if not self.caps:
-            print("No cameras available")
-            return
+            return self.after(16, self.on_update_video)
 
         self.update_idletasks()
         cw = self.video_frame.winfo_width()
@@ -151,6 +150,11 @@ class DashboardApp(ctk.CTk):
         
         self.settings = get_app_settings()
         aruco_id = int(self.settings.get("aruco_id", "782"))
+        
+        for cap in self.caps.values():
+            if not cap.isOpened():
+                print(f"Cannot open camera {cap}")
+                return self.after(16, self.on_update_video)
 
         stitched, processed_frames, pose = find_robot_in_arena(aruco_id, self.arena_settings, self.caps, save_path="Data/robot_pos.txt")
         self.current_frame = stitched
@@ -180,11 +184,22 @@ class DashboardApp(ctk.CTk):
             self.serial_var.set(vals[0])
 
     def on_arena_config(self):
+        print("Opening Arena Configuration...")
+        print("Current cameras:", self.caps)
+        for cap in self.caps.values():
+            cap.release()
+        self.caps = {}
         if getattr(self, "arena_popup", None) and self.arena_popup.winfo_exists():
             self.arena_popup.lift()
             self.arena_popup.focus_force()
             return
-        launch_grid_popup(app, refresh_cameras())
+        self.arena_popup = launch_grid_popup(app, refresh_cameras())
+
+        self.wait_window(self.arena_popup)
+
+        # popup closed -> reload settings & reopen cameras
+        self.arena_settings = load_arena_settings()
+        self.caps = open_all_cameras(self.arena_settings)
 
     def on_settings(self):
         if getattr(self, "settings_popup", None) and self.settings_popup.winfo_exists():

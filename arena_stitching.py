@@ -228,8 +228,12 @@ if __name__ == "__main__":
 
     try:
         while True:
-            stitched, processed_frames, pose = find_robot_in_arena(robot_marker_id, settings, caps)
-            final_x, final_y, final_theta = pose 
+            stitched, processed_frames_list, pose = find_robot_in_arena(robot_marker_id, settings, caps)
+            if pose is None:
+                print("Robot not detected in any cell.")
+                final_x, final_y, final_theta = None, None, None
+            else:
+                final_x, final_y, final_theta = pose 
 
             if final_x is not None and final_y is not None:
                 center_point = (int(final_x), int(final_y))
@@ -252,6 +256,9 @@ if __name__ == "__main__":
 
             if stitched is not None:
                 cv2.imshow("Stitched Arena", stitched)
+            
+            for key, frame in processed_frames_list.items():
+                cv2.imshow(f"Cell {key}", frame)
 
             key = cv2.waitKey(1) & 0xFF
             if key == 27:

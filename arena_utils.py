@@ -56,16 +56,69 @@ def load_arena_settings():
         # fallback if corrupted
         return default_settings
 
-def open_all_cameras(settings):
+def open_all_cameras(settings, test_read=True, warmup_frames=0):
+    rows = int(settings.get("rows", 0))
+    cols = int(settings.get("cols", 0))
+    cells = settings.get("cells", {})
+
     caps = {}
-    for cell_key, cell in settings["cells"].items():
-        cam_id = int(cell["camera"])
-        if cam_id not in caps:
-            cap = cv2.VideoCapture(cam_id)
-            if cap.isOpened():
-                caps[cam_id] = cap
-            else:
-                print(f"Failed to open camera {cam_id}")
+    needed_camera_ids = set()
+
+    # Collect only the cameras referenced by the active grid
+    for r in range(rows):
+        for c in range(cols):
+            key = f"{r},{c}"
+            cell = cells.get(key)
+            if not cell:
+                # You can log a warning if a cell is missing:
+                # print(f"[WARN] No config for cell {key}; skipping.")
+                continue
+            if "camera" not in cell:
+                # print(f"[WARN] Cell {key} has no 'camera' field; skipping.")
+                continue
+            try:
+                cam_id = int(cell["camera"])
+            except (TypeError, ValueError):
+                # print(f"[WARN] Invalid camera id in cell {key}: {cell['camera']}")
+                continue
+            needed_camera_ids.add(cam_id)
+
+    # Open each required camera once
+    for cam_id in sorted(needed_camera_ids):
+        cap = cv2.VideoCapture(cam_id)
+        if not cap.isOpened():
+            print(f"Failed to open camera {cam_id}")
+            continue
+
+        # Optional: test a read
+        ok = True
+        if test_read:
+            ret, _ = cap.read()
+            if not ret:
+                print(f"Camera {cam_id} opened but failed to read a frame; releasing.")
+                cap.release()
+                ok = False
+
+        # Optional: warm up by grabbing a few frames
+        if ok and warmup_frames > 0:
+            for _ in range(warmup_frames):
+                cap.read()
+
+        if ok:
+            caps[cam_id] = cap
+
+    # Optional: note any cells outside the active grid (ignored)
+    # This helps catch config drift.
+    for key in cells.keys():
+        try:
+            r, c = map(int, key.split(","))
+            if r >= rows or c >= cols:
+                # print(f"[INFO] Ignoring extra cell {key} outside active {rows}x{cols} grid.")
+                pass
+        except Exception:
+            # print(f"[WARN] Bad cell key format: {key}")
+            pass
+
     return caps
 
 def save_arena_settings(settings_dict):
@@ -290,6 +343,8 @@ def launch_grid_popup(parent_app, camera_options):
 
     ctk.CTkButton(button_frame, text="Save", command=on_save).pack(side="left", expand=True, padx=20)
     ctk.CTkButton(button_frame, text="Cancel", command=on_cancel).pack(side="right", expand=True, padx=20)
+
+    return popup
 
 def open_cell_config_popup(parent, row, col, camera_options):
     should_stream = [True]
