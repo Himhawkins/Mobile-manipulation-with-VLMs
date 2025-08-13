@@ -241,16 +241,15 @@ class PIDController:
 
             ang_err = self.normalize(heading - theta)
             dir_mult = 1
-            if abs(ang_err) > math.pi/2:
-                ang_err = self.normalize(ang_err - math.pi)
-                dir_mult = -1
+            move_flag = 1 if (abs(math.degrees(ang_err)) <= self.ang_tolerance and abs(ang_err) < math.pi/2) else 0
+            # Uncomment for: Both forward and backward movement
+            # move_flag = 1 if abs(math.degrees(ang_err)) <= self.ang_tolerance else 0
+            # if abs(ang_err) > math.pi/2:
+            #     ang_err = self.normalize(ang_err - math.pi)
+            #     dir_mult = -1
 
             self.integral_ang += ang_err * dt
-            # if self.prev_ang_err==0:
-            #     deriv_ang=0
-            # else:
             deriv_ang = (ang_err - self.prev_ang_err) / dt
-            
             self.prev_ang_err = ang_err
 
             ang_ctrl = (
@@ -259,12 +258,10 @@ class PIDController:
                 self.Kd_ang * deriv_ang
             )
             lin_ctrl = max(-max_lin, min(max_lin, self.Kp_dist * dist_err))
-            move_flag = 1 if abs(math.degrees(ang_err)) <= self.ang_tolerance else 0
 
             left = base_speed + (move_flag * dir_mult * lin_ctrl) - ang_ctrl
             right = base_speed + (move_flag * dir_mult * lin_ctrl) + ang_ctrl
-            # if self.Kd_ang * deriv_ang !=0:
-            #     print(self.Kd_ang * deriv_ang)
+            
             left = max(70, min(110, self.adjust_speed(left)))
             right = max(70, min(110, self.adjust_speed(right)))
             #print("EXECUTING:::",tx, " ",ty, " COMMAND SENT: ",left," ,",right ,"P :",self.Kp_ang * ang_err , " D: ",(ang_err - self.prev_ang_err)  , " I: ", self.Ki_ang * self.integral_ang )

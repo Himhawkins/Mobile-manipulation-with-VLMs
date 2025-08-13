@@ -7,7 +7,8 @@ import time
 import numpy as np
 from PIL import Image, ImageTk
 
-SETTINGS_PATH = "Settings/arena_settings.json"
+SETTINGS_PATH = "Settings/settings.json"
+ARENA_SETTINGS_PATH = "Settings/arena_settings.json"
 
 def refresh_cameras(max_index=10, current_index=None):
     """
@@ -39,14 +40,14 @@ def load_arena_settings():
         "cells": {}
     }
 
-    if not os.path.exists(SETTINGS_PATH):
-        os.makedirs(os.path.dirname(SETTINGS_PATH), exist_ok=True)
-        with open(SETTINGS_PATH, "w") as f:
+    if not os.path.exists(ARENA_SETTINGS_PATH):
+        os.makedirs(os.path.dirname(ARENA_SETTINGS_PATH), exist_ok=True)
+        with open(ARENA_SETTINGS_PATH, "w") as f:
             json.dump(default_settings, f, indent=2)
         return default_settings
 
     try:
-        with open(SETTINGS_PATH, "r") as f:
+        with open(ARENA_SETTINGS_PATH, "r") as f:
             data = json.load(f)
             # Validate and merge with defaults
             settings = default_settings.copy()
@@ -181,10 +182,45 @@ def open_all_cameras(
 
     return caps
 
-def save_arena_settings(settings_dict):
-    os.makedirs(os.path.dirname(SETTINGS_PATH), exist_ok=True)
+def save_arena_settings(arena_settings):
+    # 1. Save the arena_settings.json
+    os.makedirs(os.path.dirname(ARENA_SETTINGS_PATH), exist_ok=True)
+    with open(ARENA_SETTINGS_PATH, "w") as f:
+        json.dump(arena_settings, f, indent=2)
+
+    # 2. Calculate total width and height
+    rows = arena_settings.get("rows", 0)
+    cols = arena_settings.get("cols", 0)
+    cells = arena_settings.get("cells", {})
+
+    # Width = sum of widths in a row minus overlaps between adjacent cells
+    total_width = 0
+    for c in range(cols):
+        key = f"0,{c}"
+        cell = cells.get(key, {})
+        total_width += cell.get("width", 0)
+
+    # Height = sum of heights in a column (no vertical overlap in your data)
+    total_height = 0
+    for r in range(rows):
+        key = f"{r},0"
+        cell = cells.get(key, {})
+        total_height += cell.get("height", 0)
+
+    # 3. Update settings.json
+    settings_data = {}
+    if os.path.exists(SETTINGS_PATH):
+        with open(SETTINGS_PATH, "r") as f:
+            try:
+                settings_data = json.load(f)
+            except json.JSONDecodeError:
+                pass
+
+    settings_data["arena_width"] = str(total_width)
+    settings_data["arena_height"] = str(total_height)
+
     with open(SETTINGS_PATH, "w") as f:
-        json.dump(settings_dict, f, indent=2)
+        json.dump(settings_data, f, indent=2)
 
 def safe_grab_set(window):
     def try_grab():
