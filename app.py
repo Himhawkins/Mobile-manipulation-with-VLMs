@@ -11,7 +11,6 @@ from ui_utils import CTkMessageBox, CheckGroup, get_app_settings, open_settings_
 from camera_utils import start_camera, read_frame, display_frame, draw_robot_pose
 from agent_utils import save_agent_to_disk, get_agent_folders, get_agent_functions, get_all_functions
 from port_utils import refresh_serial_ports
-from detection import detect_robot_pose
 from thread_utils import run_in_thread, disable_button, enable_button, callibrate_task, run_task, toggle_execute
 from ui_utils import overlay_obstacles, get_overlay_frame, draw_path_on_frame
 from arena_utils import refresh_cameras, launch_grid_popup, load_arena_settings, open_all_cameras
