@@ -1,18 +1,15 @@
 import os
-import re
-import json
-import cv2
 from PIL import Image, ImageTk
 import customtkinter as ctk
 import threading
 
 # Import from new helper modules
 from ui_utils import CTkMessageBox, CheckGroup, get_app_settings, open_settings_popup
-from camera_utils import start_camera, read_frame, display_frame, draw_robot_pose
+from camera_utils import display_frame, draw_robot_pose
 from agent_utils import save_agent_to_disk, get_agent_folders, get_agent_functions, get_all_functions
 from port_utils import refresh_serial_ports
 from thread_utils import run_in_thread, disable_button, enable_button, callibrate_task, run_task, toggle_execute
-from ui_utils import overlay_obstacles, get_overlay_frame, draw_path_on_frame
+from ui_utils import overlay_obstacles, draw_path_on_frame
 from arena_utils import refresh_cameras, launch_grid_popup, load_arena_settings, open_all_cameras
 from arena_stitching import find_robot_in_arena
 
