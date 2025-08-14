@@ -58,7 +58,7 @@ if __name__ == '__main__':
         help='File to write the planned path points'
     )
     parser.add_argument(
-        '--spacing', type=int, default=35,
+        '--spacing', type=float, default=35,
         help='Pixel spacing buffer for obstacle dilation'
     )
     args = parser.parse_args()

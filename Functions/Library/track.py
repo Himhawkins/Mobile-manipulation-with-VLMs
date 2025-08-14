@@ -170,7 +170,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Point selection GUI")
     parser.add_argument('--data_folder', default='Data')
     parser.add_argument('--output_target_path', default='Targets/path.txt')
-    parser.add_argument('--spacing', type=int, default=25)
+    parser.add_argument('--spacing', type=float, default=25)
     args = parser.parse_args()
 
     msg = point_track(

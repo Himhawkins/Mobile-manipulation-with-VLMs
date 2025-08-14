@@ -1,6 +1,6 @@
 This agent lets the user click and select the points where the robot needs to travela and saves the path.
 
-Just execute the function without any arguments, use the default arguments.
+Spacing 50
 Path points will be saved in Targets/path.txt
 
 if you dont have sufficient data required by a function dont run it. Wait for the relevant data to come.
