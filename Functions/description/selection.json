@@ -16,6 +16,10 @@
         "spacing": {
           "type": "NUMBER",
           "description": "Number of pixels to inflate obstacles outward and erode the arena boundary inward. Defaults to 35."
+        },
+        "delay": {
+          "type": "NUMBER",
+          "description": "Delay (ms) at main checkpoints. Defaults to 0."
         }
       },
       "required": []

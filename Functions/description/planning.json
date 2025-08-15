@@ -1,7 +1,7 @@
 [
   {
     "name": "trace_targets",
-    "description": "Traces A* paths between a list of target coordinates, avoiding obstacles and saving all reachable points to a file and a visualization image.\n\nOutput: Saves the improved path points to a text file and renders a visual path overlay image with arena, obstacles, and path segments.\n\nExample Usage: `trace_targets([(50,50), (150,150)], 'Targets/improved.txt', start=(10,10), data_folder='Data', spacing=5, out_path='Data/trace_overlay.png')`  returns: Confirmation message indicating path generation success and saved file location.",
+    "description": "Traces A* paths between a list of target coordinates, avoiding obstacles and saving all reachable points to a file and a visualization image. At each checkpoint (the final point of each segment to a target), an optional delay (in milliseconds) can be written as a third CSV column for that point.\n\nOutput: Saves the improved path points to a text file (x,y or x,y,delay_ms at checkpoints) and renders a visual path overlay image with arena, obstacles, and path segments.\n\nExample Usage: `trace_targets([(50,50), (150,150)], 'Targets/improved.txt', start=(10,10), data_folder='Data', spacing=5, delay=1500, out_path='Data/trace_overlay.png')` returns: Confirmation message indicating path generation success and saved file location.",
     "parameters": {
       "type": "OBJECT",
       "properties": {
@@ -32,7 +32,11 @@
         },
         "spacing": {
           "type": "INTEGER",
-          "description": "Optional dilation spacing (in pixels) around obstacles to ensure safe A* navigation."
+          "description": "Optional dilation spacing (in pixels) around obstacles to ensure safe A* navigation. Default 50."
+        },
+        "delay": {
+          "type": "INTEGER",
+          "description": "Optional delay (in milliseconds) to apply at EACH checkpoint. You may also pass an array of integers (one per target) if your caller supports non-scalar types; e.g., [1000, 0, 2000]. When provided, the delay is written only on the last point of each segment."
         },
         "out_path": {
           "type": "STRING",
@@ -43,6 +47,5 @@
         "input_target_list"
       ]
     }
-   
   }
 ]

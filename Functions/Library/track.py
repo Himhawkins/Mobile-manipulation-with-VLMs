@@ -11,7 +11,8 @@ import argparse
 
 def point_track(data_folder='Data',
                 output_target_path='Targets/path.txt',
-                spacing=50):
+                spacing=50,
+                delay=0):  # <- NEW
     """
     Launch a CustomTkinter GUI for point selection and path planning.
     Returns a status message upon Save or "User didn't select any points" on close.
@@ -150,10 +151,13 @@ def point_track(data_folder='Data',
             nonlocal result_message
             with open(output_target_path, 'w') as f:
                 for p in paths:
-                    for ux, uy in p:
-                        f.write(f"{int(ux)},{int(uy)}\n")
+                    for i, (ux, uy) in enumerate(p):
+                        is_main_checkpoint = (i == len(p) - 1)
+                        this_delay = delay if is_main_checkpoint else 0
+                        f.write(f"{int(ux)},{int(uy)},{int(this_delay)}\n")  # now writing x,y,delay
             result_message = f"Path Planned! and saved to {output_target_path}"
             self.destroy()
+
 
         def reset(self):
             nonlocal points, paths, current
@@ -171,11 +175,13 @@ if __name__ == "__main__":
     parser.add_argument('--data_folder', default='Data')
     parser.add_argument('--output_target_path', default='Targets/path.txt')
     parser.add_argument('--spacing', type=float, default=25)
+    parser.add_argument('--delay', type=float, default=0, help="Delay (ms) at main checkpoints")  # <- NEW
     args = parser.parse_args()
 
     msg = point_track(
         data_folder=args.data_folder,
         output_target_path=args.output_target_path,
-        spacing=args.spacing
+        spacing=args.spacing,
+        delay=args.delay  # <- NEW
     )
     print(msg)

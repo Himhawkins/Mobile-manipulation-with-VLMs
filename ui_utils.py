@@ -272,25 +272,102 @@ def get_overlay_frame(
         print(f"[get_overlay_frame] Warp error: {e}")
         return overlay
 
-def draw_path_on_frame(frame, path_file="path.txt", color=(0, 255, 0), thickness=2):
+# def draw_path_on_frame(frame, path_file="path.txt", color=(0, 255, 0), thickness=2):
+#     if not os.path.exists(path_file):
+#         print(f"[draw_path_on_frame] Path file not found: {path_file}")
+#         return frame
+
+#     try:
+#         with open(path_file, "r") as f:
+#             pts = [tuple(map(int, line.strip().split(","))) for line in f if "," in line]
+
+#         if len(pts) < 3:
+#             return frame  # nothing to draw
+
+#         for i in range(1, len(pts)):
+#             cv2.line(frame, pts[i - 1], pts[i], color, thickness)
+
+#     except Exception as e:
+#         print(f"[draw_path_on_frame] Error: {e}")
+
+#     return frame
+
+import os
+import cv2
+
+def draw_path_on_frame(
+    frame,
+    path_file="path.txt",
+    color=(0, 255, 0),
+    thickness=2,
+    show_checkpoints=True,             # set True to mark delay>0 points
+    checkpoint_color=(0, 255, 255),
+    checkpoint_radius=4,
+    annotate_delay=False,
+    font=cv2.FONT_HERSHEY_SIMPLEX,
+    font_scale=0.4,
+    text_thickness=1
+):
+    """
+    Draws a polyline from a path file where each line is:
+        x,y,delay
+    - Only (x,y) are used to draw the path.
+    - If show_checkpoints is True, points with delay>0 are highlighted/annotated.
+    """
     if not os.path.exists(path_file):
         print(f"[draw_path_on_frame] Path file not found: {path_file}")
         return frame
 
+    pts = []       # list[(x, y)]
+    delays = []    # list[float]
+
     try:
-        with open(path_file, "r") as f:
-            pts = [tuple(map(int, line.strip().split(","))) for line in f if "," in line]
+        with open(path_file, "r", encoding="utf-8") as f:
+            for ln, raw in enumerate(f, 1):
+                line = raw.strip()
+                if not line:
+                    continue
+
+                # Accept comma- or space-separated
+                parts = [p for p in line.replace(",", " ").split() if p]
+                if len(parts) < 2:
+                    # malformed line; skip
+                    continue
+
+                try:
+                    x = int(float(parts[0]))
+                    y = int(float(parts[1]))
+                    d = float(parts[2]) if len(parts) >= 3 else 0.0
+                except ValueError:
+                    print(f"[draw_path_on_frame] Skipping bad line {ln}: '{raw.rstrip()}'")
+                    continue
+
+                pts.append((x, y))
+                delays.append(d)
 
         if len(pts) < 2:
             return frame  # nothing to draw
 
+        # Draw the polyline
         for i in range(1, len(pts)):
             cv2.line(frame, pts[i - 1], pts[i], color, thickness)
+
+        # Optionally mark checkpoints (delay > 0)
+        if show_checkpoints:
+            for (x, y), d in zip(pts, delays):
+                if d > 0:
+                    cv2.circle(frame, (x, y), checkpoint_radius, checkpoint_color, -1)
+                    if annotate_delay:
+                        cv2.putText(
+                            frame, f"{d:g}", (x + 5, y - 5),
+                            font, font_scale, checkpoint_color, text_thickness, cv2.LINE_AA
+                        )
 
     except Exception as e:
         print(f"[draw_path_on_frame] Error: {e}")
 
     return frame
+
 
 def get_arena_dimensions(settings_path="Settings/settings.json"):
     DEFAULT_WIDTH = 1200

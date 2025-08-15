@@ -14,6 +14,7 @@ def trace_targets(
     start=None,
     data_folder="Data",
     spacing=50,
+    delay=0,
     out_path="Data/trace_overlay.png"
 ):
     # 1) load world
@@ -45,6 +46,15 @@ def trace_targets(
 
     # 4) use the provided list directly
     targets = [(int(x), int(y)) for x,y in input_target_list]
+
+    # --- delays per checkpoint ---
+    if isinstance(delay, (int, float)):
+        delays = [int(delay)] * len(targets)
+    else:
+        # assume iterable of delays, one per target
+        delays = [int(d) for d in delay]
+        if len(delays) != len(targets):
+            raise ValueError("Length of 'delay' must match number of targets")
 
     paths = []
     current = start
@@ -90,11 +100,15 @@ def trace_targets(
     fig.savefig(out_path, bbox_inches='tight')
     plt.close(fig)
 
-    # 6) flatten and save
-    improved_points = [pt for path in paths for pt in path]
+    # 6) save: write delay only at checkpoint (last point of each path)
     with open(output_target_path, "w") as f:
-        for x, y in improved_points:
-            f.write(f"{x},{y}\n")
+        for i, path in enumerate(paths):
+            for j, (x, y) in enumerate(path):
+                if j == len(path) - 1:  # checkpoint reached
+                    f.write(f"{x},{y},{delays[i]}\n")
+                else:
+                    f.write(f"{x},{y}\n")
+
 
     return f"Path Planned! and saved to {output_target_path}"
 

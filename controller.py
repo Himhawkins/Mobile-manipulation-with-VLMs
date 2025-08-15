@@ -5,6 +5,8 @@ Modular Robot Controller Library
 Provides classes and a helper function for file-based robot control using a PID controller.
 Targets, pose, command, and error logs are stored in four separate plain-text files.
 Running the module directly will initialize default text files and execute a test run.
+
+NOTE: Target delay values are in *milliseconds* (ms).
 """
 import math
 import os
@@ -40,17 +42,18 @@ class FileInterface:
         self._initialize_files()
 
     def _initialize_files(self):
-        # default targets: one "x,y,theta" per line
+        # default targets: each line "x,y,delay_ms" (delay in milliseconds)
+        # NOTE: reader also accepts legacy "x,y" (delay defaults to 0)
         default_targets = [
-            f"{5},{0}",
-            f"{5},{5}",
-            f"{0},{5}",
-            f"{0},{0}",
+            "5,0,0",
+            "5,5,1500",   # pause 1500 ms (1.5 s)
+            "0,5,0",
+            "0,0,2000",   # pause 2000 ms (2.0 s)
         ]
         _ensure_txt(self.target_file, default_targets)
 
         # default pose: single "x,y,theta" line
-        default_pose = [f"{0},{0},{0.0}"]
+        default_pose = ["0,0,0.0"]
         _ensure_txt(self.pose_file, default_pose)
 
         # default command: single "left_speed,right_speed" line
@@ -86,19 +89,21 @@ class FileInterface:
 
     def read_targets(self):
         """
-        Reads waypoints from the targets text file, skipping header "(i/N)" if present.
-        Supports multiple lines, each "x,y,theta".
+        Reads waypoints from the targets text file.
+        Accepts 'x,y' or 'x,y,delay_ms' (delay in milliseconds).
+        Returns: list of (x: float, y: float, delay_ms: float)
         """
         lines = self._load_lines(self.target_file)
-        # drop header "(i/N)" if first line matches pattern
-        # if lines and lines[0].startswith('(') and '/' in lines[0]:
-        #     lines = lines[1:]
         targets = []
         for line in lines:
             try:
-                x_str, y_str = line.split(',')
-                
-                targets.append((float(x_str), float(y_str)))#, float(th_str)))
+                parts = [p.strip() for p in line.split(',') if p.strip() != ""]
+                if len(parts) < 2:
+                    raise ValueError("Too few values")
+                x = float(parts[0])
+                y = float(parts[1])
+                delay_ms = float(parts[2]) if len(parts) >= 3 else 0.0  # ms
+                targets.append((x, y, delay_ms))
             except Exception as e:
                 print(f"Warning: Skipping malformed target line '{line}': {e}")
         return targets
@@ -146,7 +151,7 @@ class PIDController:
     def __init__(
         self, iface: FileInterface,
         Kp_dist=0.2, Kp_ang=4.0, Ki_ang=0.07, Kd_ang=0.7,
-        dist_tolerance=0.05, ang_tolerance=0.1,final_distance_tol=0.05
+        dist_tolerance=0.05, ang_tolerance=0.1, final_distance_tol=0.05
     ):
         self.iface = iface
         self.Kp_dist = Kp_dist
@@ -158,7 +163,7 @@ class PIDController:
         self.integral_ang = 0.0
         self.prev_ang_err = 0.0
         self.prev_time = time.time()
-        self.final_distance_tol=final_distance_tol
+        self.final_distance_tol = final_distance_tol
 
     @staticmethod
     def normalize(angle):
@@ -179,20 +184,40 @@ class PIDController:
     def _write_targets_header(self, idx, total, targets):
         """
         Overwrites the targets file to include a header "(idx/total)" followed by all waypoints.
+        Writes x,y only to keep header tidy; delays are preserved in memory.
         """
         try:
             with open(self.iface.target_file, 'w') as f:
                 f.write(f"({idx}/{total})\n")
-                for x, y, th in targets:
+                for x, y, d_ms in targets:
                     f.write(f"{int(x)},{int(y)}\n")
         except Exception as e:
             print(f"Error updating targets file header: {e}")
 
+    def _pause_at_checkpoint(self, delay_s, stop_event=None):
+        """
+        Pause for delay_s seconds, remaining responsive to stop_event.
+        Sends neutral command once at the start of the pause.
+        """
+        if delay_s <= 0:
+            return
+        self.iface.write_command(90, 90)  # neutral command during hold
+        remaining = float(delay_s)
+        step = 0.05  # 50 ms granularity for responsiveness
+        start = time.time()
+        while remaining > 0:
+            if stop_event and stop_event.is_set():
+                break
+            sleep_dur = min(step, remaining)
+            time.sleep(sleep_dur)
+            remaining = delay_s - (time.time() - start)
+
     def run(self, stop_event=None):
         """
         Executes the PID control loop to navigate through the targets.
+        Pauses at each checkpoint for the target's delay (in milliseconds).
         """
-        targets = self.iface.read_targets()
+        targets = self.iface.read_targets()   # list[(x, y, delay_ms)]
         if not targets:
             print("No targets to process. Exiting controller.")
             return
@@ -201,9 +226,8 @@ class PIDController:
         base_speed = 90
         max_lin = 15
 
-        # initial header at (0/total)
-        #self._write_targets_header(idx, total, targets)
-        i=0
+        # self._write_targets_header(idx, total, targets)
+
         while idx < total and not (stop_event and stop_event.is_set()):
             now = time.time()
             dt = now - self.prev_time
@@ -213,40 +237,40 @@ class PIDController:
             self.prev_time = now
 
             x, y, theta = self.iface.read_pos()
-            tx, ty = targets[idx]
+            if (x, y, theta) == (0.0, 0.0, 0.0) and not self.iface._load_lines(self.iface.pose_file):
+                # pose file is blank, send stop command
+                self.iface.write_command(90, 90)
+                print("robot_pos.txt is blank — stopping robot.")
+                time.sleep(0.05)
+                continue
+            tx, ty, delay_ms = targets[idx]  # <-- includes delay (ms)
             dist_err = math.hypot(tx - x, ty - y)
             heading = math.atan2(ty - y, tx - x)
-            #print("EXECUTING:::",tx, " ",ty)
-         
+
+            # Reached current target?
             if dist_err < self.dist_tolerance:
-                if idx+1==total:
+                # If last target, enforce tighter final tolerance before finishing
+                if idx + 1 == total:
                     if dist_err < self.final_distance_tol:
+                        # Pause at final checkpoint (convert ms -> s)
+                        self._pause_at_checkpoint(delay_ms / 1000.0, stop_event=stop_event)
                         print("REACHED END!")
                         idx += 1
                         continue
                 else:
-                    print(f"Reached target {idx+1}/{total} at ({x:.2f}, {y:.2f}). Moving to next.")
-                    idx += 1
-                    #time.sleep(0.01)
-                    # if i%15==0:
+                    print(f"Reached target {idx+1}/{total} at ({x:.2f}, {y:.2f}).")
+                    # Pause at intermediate checkpoint (convert ms -> s)
+                    self._pause_at_checkpoint(delay_ms / 1000.0, stop_event=stop_event)
+                    # Reset heading controller terms before next leg
                     self.integral_ang = 0.0
                     self.prev_ang_err = 0.0
-                    #self.iface.write_command(base_speed, base_speed)
+                    idx += 1
                     continue
-                # update header to (idx/total)
-                #self._write_targets_header(idx, total, targets)
 
-                #self.iface.write_command(base_speed, base_speed)
-                
-
+            # Angular control & gating for forward motion
             ang_err = self.normalize(heading - theta)
             dir_mult = 1
             move_flag = 1 if (abs(math.degrees(ang_err)) <= self.ang_tolerance and abs(ang_err) < math.pi/2) else 0
-            # Uncomment for: Both forward and backward movement
-            # move_flag = 1 if abs(math.degrees(ang_err)) <= self.ang_tolerance else 0
-            # if abs(ang_err) > math.pi/2:
-            #     ang_err = self.normalize(ang_err - math.pi)
-            #     dir_mult = -1
 
             self.integral_ang += ang_err * dt
             deriv_ang = (ang_err - self.prev_ang_err) / dt
@@ -261,29 +285,12 @@ class PIDController:
 
             left = base_speed + (move_flag * dir_mult * lin_ctrl) - ang_ctrl
             right = base_speed + (move_flag * dir_mult * lin_ctrl) + ang_ctrl
-            
+
             left = max(70, min(110, self.adjust_speed(left)))
             right = max(70, min(110, self.adjust_speed(right)))
-            #print("EXECUTING:::",tx, " ",ty, " COMMAND SENT: ",left," ,",right ,"P :",self.Kp_ang * ang_err , " D: ",(ang_err - self.prev_ang_err)  , " I: ", self.Ki_ang * self.integral_ang )
+
             self.iface.write_command(left, right)
             self.iface.log_error(dist_err, ang_err)
-            #time.sleep(0.01)
-
-        # Final orientation adjustment
-        # print(f"All targets reached. Adjusting final orientation to {targets[-1][2]:.2f} radians.")
-        # final_th = targets[-1][2]
-        # while True:
-        #     _, _, theta = self.iface.read_pos()
-        #     err = self.normalize(final_th - theta)
-        #     if abs(err) < self.ang_tolerance:
-        #         print(f"Final orientation aligned: {theta:.2f} rad.")
-        #         break
-        #     turn = 20 * err
-        #     left_cmd = max(70, min(110, self.adjust_speed(base_speed - turn)))
-        #     right_cmd = max(70, min(110, self.adjust_speed(base_speed + turn)))
-        #     self.iface.write_command(left_cmd, right_cmd)
-        #     self.iface.log_error(0.0, err)
-        #     time.sleep(0.05)
 
         self.iface.write_command(90, 90)
         print("Robot navigation completed.")
@@ -291,7 +298,7 @@ class PIDController:
 
 def run_controller(
     target_file, pose_file, command_file, error_file,
-    Kp_dist=0.2, Kp_ang=4.0, Ki_ang=0.11,Kd_ang=-0.001, #0.7, #0.7, #0.7, # 0.07 
+    Kp_dist=0.2, Kp_ang=4.0, Ki_ang=0.11, Kd_ang=-0.001,
     dist_tolerance=15, ang_tolerance=12, final_distance_tol=10, stop_event=None
 ):
     """
@@ -303,7 +310,7 @@ def run_controller(
         Kp_dist=Kp_dist, Kp_ang=Kp_ang,
         Ki_ang=Ki_ang, Kd_ang=Kd_ang,
         dist_tolerance=dist_tolerance,
-        ang_tolerance=ang_tolerance,final_distance_tol=final_distance_tol
+        ang_tolerance=ang_tolerance, final_distance_tol=final_distance_tol
     )
     controller.run(stop_event=stop_event)
 
@@ -358,26 +365,3 @@ def exec_bot_with_thread(stop_event):
 
 if __name__ == "__main__":
     exec_bot()
-    # Define file paths using Path for cross-platform compatibility
-    # target_file  = str(Path("targets") / "pattern_llm" / "targets.txt")
-    # pose_file    = str(Path("controls") / "pose.txt")
-    # command_file = str(Path("controls") / "command.txt")
-    # error_file   = str(Path("controls") / "error.txt")
-
-    # print("Starting demo run of PID controller…")
-    # try:
-    #     run_controller(
-    #         target_file,
-    #         pose_file,
-    #         command_file,
-    #         error_file
-    #     )
-    # except Exception as e:
-    #     print(f"An error occurred during the controller run: {e}")
-    # finally:
-    #     print(f"Demo run completed. Files used:\n"
-    #           f"  Targets:  {target_file}\n"
-    #           f"  Pose:     {pose_file}\n"
-    #           f"  Command:  {command_file}\n"
-    #           f"  Error:    {error_file}")
-

@@ -61,8 +61,8 @@ def open_all_cameras(
     settings,
     test_read=True,
     warmup_frames=3,
-    width=640,
-    height=480,
+    width=1280,
+    height=960,
     fps=15,
     retries=3,
     reopen_once=True

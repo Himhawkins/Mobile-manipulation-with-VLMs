@@ -7,14 +7,17 @@ import cv2
 import numpy as np
 from astar import PathPlanner
 from Functions.Library.Agent.load_data import read_data
+import argparse
 
 def point_track(data_folder='Data',
                 output_target_path='Targets/path.txt',
-                spacing=25):
+                spacing=50,
+                delay=0):  # <- NEW
     """
     Launch a CustomTkinter GUI for point selection and path planning.
     Returns a status message upon Save or "User didn't select any points" on close.
     """
+    # --- load data ---
     img_path = os.path.join(data_folder, "frame_img.png")
     frame = cv2.imread(img_path)
     if frame is None:
@@ -24,11 +27,15 @@ def point_track(data_folder='Data',
     data = read_data(data_folder)
     if data is None:
         return f"Error: Could not read data from '{data_folder}'"
-    
     arena = [tuple(map(int, row)) for row in data['arena_corners']]
-    obs = [{"corners": [tuple(map(int, pt)) for pt in row]} for row in data['obstacles']]
+
+    # Use 4-corner obstacle polygons directly
+    obs = [{"corners": [tuple(pt) for pt in row]} for row in data['obstacles']]
+
     sx, sy, _ = data['robot_pos']
     current = (int(sx), int(sy))
+
+    spacing = int(spacing)
 
     # build planner
     planner = PathPlanner(obs, (h, w), arena)
@@ -48,8 +55,10 @@ def point_track(data_folder='Data',
         approx = cv2.approxPolyDP(large, spacing, True)
         inner_boundary = [tuple(pt[0]) for pt in approx]
 
+    # convert frame for display
     pil = Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
 
+    # state
     points = []
     paths = []
     result_message = None
@@ -58,59 +67,73 @@ def point_track(data_folder='Data',
         def __init__(self):
             super().__init__()
             self.title("Point Selection")
+            # canvas
             self.canvas = tk.Canvas(self, width=w, height=h)
             self.canvas.pack()
             self.tk_img = ImageTk.PhotoImage(pil)
             self.canvas.create_image(0, 0, image=self.tk_img, anchor="nw", tags="bg")
-
+            # buttons
             btn_frame = ctk.CTkFrame(self)
             btn_frame.pack(fill="x", pady=5)
             self.save_btn = ctk.CTkButton(btn_frame, text="Save", command=self.save)
             self.save_btn.pack(side="left", padx=20)
             self.reset_btn = ctk.CTkButton(btn_frame, text="Reset", command=self.reset)
             self.reset_btn.pack(side="right", padx=20)
-
+            # mouse click
             self.canvas.bind("<Button-1>", self.on_click)
             self.draw_overlay()
 
         def draw_overlay(self):
             self.canvas.delete("overlay")
             img = frame.copy()
+
             # draw arena
-            cv2.polylines(img, [np.array(arena, np.int32)], True, (0,255,255), 2)
+            cv2.polylines(img, [np.array(arena, np.int32)], True, (0, 255, 255), 2)
+
             # draw inner boundary
             for i in range(len(inner_boundary)):
-                cv2.line(img, inner_boundary[i], inner_boundary[(i+1)%len(inner_boundary)],
-                         (255,255,0), 1, cv2.LINE_AA)
+                cv2.line(img,
+                        inner_boundary[i],
+                        inner_boundary[(i + 1) % len(inner_boundary)],
+                        (255, 255, 0), 1, cv2.LINE_AA)
 
-            # draw polygonal obstacles + spacing visualization
-            for obs_poly in obs:
-                corners = np.array(obs_poly['corners'], dtype=np.int32)
-                cv2.fillPoly(img, [corners], (0,0,255))
+            # draw obstacles + offset polygons
+            for ob in obs:
+                corners = np.array(ob["corners"], dtype=np.int32)
 
-                # draw dotted spacing box around polygon's bbox for visual feedback
-                x, y, w_box, h_box = cv2.boundingRect(corners)
-                tl = (x - spacing, y - spacing)
-                br = (x + w_box + spacing, y + h_box + spacing)
-                for dx in range(tl[0], br[0], 10):
-                    cv2.line(img, (dx, tl[1]), (dx+5, tl[1]), (0,255,255), 1)
-                    cv2.line(img, (dx, br[1]), (dx+5, br[1]), (0,255,255), 1)
-                for dy in range(tl[1], br[1], 10):
-                    cv2.line(img, (tl[0], dy), (tl[0], dy+5), (0,255,255), 1)
-                    cv2.line(img, (br[0], dy), (br[0], dy+5), (0,255,255), 1)
+                # Draw original obstacle in red
+                cv2.fillPoly(img, [corners], (0, 0, 255))
 
-            # draw path lines
+                # Create mask of the obstacle
+                mask = np.zeros((h, w), dtype=np.uint8)
+                cv2.fillPoly(mask, [corners], 255)
+
+                # Dilate the mask to get padding area
+                kernel = cv2.getStructuringElement(
+                    cv2.MORPH_ELLIPSE, (2 * spacing + 1, 2 * spacing + 1))
+                dilated = cv2.dilate(mask, kernel)
+
+                # Find contours of the dilated mask
+                contours, _ = cv2.findContours(
+                    dilated, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+                if contours:
+                    offset_poly = cv2.approxPolyDP(contours[0], epsilon=2.0, closed=True)
+                    cv2.polylines(img, [offset_poly], isClosed=True, color=(0, 255, 255), thickness=2)
+
+            # draw paths
             for path in paths:
                 for (x1, y1), (x2, y2) in zip(path, path[1:]):
-                    cv2.line(img, (int(x1), int(y1)), (int(x2), int(y2)), (0,255,0), 2)
+                    cv2.line(img, (int(x1), int(y1)), (int(x2), int(y2)), (0, 255, 0), 2)
 
-            # draw current position & points
-            cv2.circle(img, current, 6, (255,255,0), -1)
+            # draw robot & points
+            cv2.circle(img, current, 6, (255, 255, 0), -1)
             for px, py in points:
-                cv2.circle(img, (px, py), 5, (255,255,255), -1)
+                cv2.circle(img, (px, py), 5, (255, 255, 255), -1)
 
-            self.overlay = ImageTk.PhotoImage(Image.fromarray(cv2.cvtColor(img, cv2.COLOR_BGR2RGB)))
+            self.overlay = ImageTk.PhotoImage(
+                Image.fromarray(cv2.cvtColor(img, cv2.COLOR_BGR2RGB)))
             self.canvas.create_image(0, 0, image=self.overlay, anchor="nw", tags="overlay")
+
 
         def on_click(self, event):
             nonlocal points, paths, current
@@ -121,17 +144,20 @@ def point_track(data_folder='Data',
                 paths.append(segment)
                 current = (x, y)
             else:
-                print(f"⚠️ Unable to reach {(x, y)} from {current}")
+                print(f"Unable to reach {(x,y)} from {current}")
             self.draw_overlay()
 
         def save(self):
             nonlocal result_message
             with open(output_target_path, 'w') as f:
-                for path in paths:
-                    for px, py in path:
-                        f.write(f"{int(px)},{int(py)}\n")
+                for p in paths:
+                    for i, (ux, uy) in enumerate(p):
+                        is_main_checkpoint = (i == len(p) - 1)
+                        this_delay = delay if is_main_checkpoint else 0
+                        f.write(f"{int(ux)},{int(uy)},{int(this_delay)}\n")  # now writing x,y,delay
             result_message = f"Path Planned! and saved to {output_target_path}"
             self.destroy()
+
 
         def reset(self):
             nonlocal points, paths, current
@@ -144,7 +170,18 @@ def point_track(data_folder='Data',
     app.mainloop()
     return result_message or "User didn't select any points"
 
-
 if __name__ == "__main__":
-    msg = point_track()
+    parser = argparse.ArgumentParser(description="Point selection GUI")
+    parser.add_argument('--data_folder', default='Data')
+    parser.add_argument('--output_target_path', default='Targets/path.txt')
+    parser.add_argument('--spacing', type=float, default=25)
+    parser.add_argument('--delay', type=float, default=0, help="Delay (ms) at main checkpoints")  # <- NEW
+    args = parser.parse_args()
+
+    msg = point_track(
+        data_folder=args.data_folder,
+        output_target_path=args.output_target_path,
+        spacing=args.spacing,
+        delay=args.delay  # <- NEW
+    )
     print(msg)

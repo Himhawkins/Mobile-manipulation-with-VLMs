@@ -191,22 +191,6 @@ def main():
     #detect_and_get_bbox(img_path=IMG_PATH, prompt="Obstacles Black Rectangles", save_path="Data/obstacles.txt")
     print("lol", g)
 if __name__ == "__main__":
-    # main()
-    obstacles = detect_obstacles(
-        img_path="Data/frame_img.png",
-        prompt="Solid Black Rectangles",                     # or any other valid prompt
-        save_path="Data/obstacles.txt"             # optional: saves the unwarped corners
-    )
-    # Print results
-    for i, corners in enumerate(obstacles):
-        print(f"Obstacle {i+1}: {corners}")
-
-    # Optional: draw obstacles on original image
-    frame = cv2.imread("Data/frame_img.png")
-    for corners in obstacles:
-        pts = np.array(corners, np.int32).reshape((-1, 1, 2))
-        cv2.polylines(frame, [pts], isClosed=True, color=(0, 255, 0), thickness=2)
-
-    cv2.imshow("Unwarped Obstacles", frame)
-    cv2.waitKey(0)
-    cv2.destroyAllWindows()
+    
+    d_objects = detect_objects(img_path='Data/frame_img.png', save_path='Targets/target.txt', prompt_list=['Orange'])
+    print(d_objects)
