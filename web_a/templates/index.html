@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <header class="top-frame">
+            <div class="control-group">
+                <select id="camera-menu"></select>
+                <button id="refresh-cameras-btn">Refresh Cameras</button>
+            </div>
+            <div class="control-group">
+                <select id="serial-menu"></select>
+                <button id="refresh-ports-btn">Refresh Ports</button>
+            </div>
+            <div class="control-group">
+                <button id="settings-btn">Settings</button>
+            </div>
+        </header>
+
+        <main class="middle-frame">
+            <div class="video-container">
+                <img id="video-feed" src="{{ url_for('video_feed') }}" alt="Video Feed">
+            </div>
+            <div class="preview-container">
+                <div id="preview1-text" class="preview-box">
+                    <p>Task output will appear here...</p>
+                </div>
+                <div id="preview2-img" class="preview-box">
+                    </div>
+            </div>
+        </main>
+
+        <footer class="bottom-frame">
+            <div class="control-group">
+                <select id="mode-menu"></select>
+                <button id="edit-agent-btn">Edit</button>
+            </div>
+            <div class="action-group">
+                <input type="text" id="input-entry" placeholder="Enter value...">
+                <button id="calibrate-btn" class="action-btn">Calibrate</button>
+                <button id="run-btn" class="action-btn">Run</button>
+                <button id="execute-btn" class="action-btn execute">Execute</button>
+            </div>
+        </footer>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+</body>
+</html>
