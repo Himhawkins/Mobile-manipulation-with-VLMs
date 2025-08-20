@@ -45,7 +45,7 @@ def callibrate_task(app):
     try:
         # detect_and_get_bbox(img_path="Data/frame_img.png", prompt=obstacle_prompt, save_path="Data/obstacles.txt")
         detect_arena(img_path="Data/frame_img.png", save_path="Data/arena_corners.txt")
-        detect_obstacles(img_path="Data/frame_img.png", prompt=obstacle_prompt, save_path="Data/obstacles.txt")
+        detect_obstacles(img_path="Data/frame_img.png", prompt=obstacle_prompt, save_path="Data/obstacles.txt", sections=3)
         app.after(0, lambda: CTkMessageBox(app, "Status", "Calibrated successfully", "white"))
     except Exception as e:
         app.after(0, lambda e=e: CTkMessageBox(app, "Error", str(e), "red"))

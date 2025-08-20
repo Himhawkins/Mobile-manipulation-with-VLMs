@@ -6,6 +6,7 @@ from PIL import Image
 from dotenv import load_dotenv
 import os
 from Functions.Library.warping import get_warped_image, unwarp_points
+from typing import List, Tuple, Union
 
 class ObjectDetector:
     def __init__(self, prompt="black rectangles") -> None:
@@ -69,29 +70,109 @@ def detect_and_get_bbox(img_path="Data/frame_img.png", prompt="Blue Cricles", sa
                     f.write(f"{x},{y},{w},{h}\n")
     return obstacles
 
-def detect_obstacles(img_path="Data/frame_img.png", prompt="Blue Circles", save_path=None):
-    frame = cv2.imread(img_path)
-    objects, _ = detect_and_list(frame, prompt)
+# def detect_obstacles(img_path="Data/frame_img.png", prompt="Blue Circles", save_path=None):
+#     frame = cv2.imread(img_path)
+#     objects, _ = detect_and_list(frame, prompt)
 
-    # Convert bbox to corner coordinates
-    warped_obstacles = []
-    for x, y, w, h in [o["bbox"] for o in objects]:
-        corners = [
-            (x, y),           # top-left
-            (x + w, y),       # top-right
-            (x + w, y + h),   # bottom-right
-            (x, y + h)        # bottom-left
-        ]
-        warped_obstacles.append(corners)
+#     # Convert bbox to corner coordinates
+#     warped_obstacles = []
+#     for x, y, w, h in [o["bbox"] for o in objects]:
+#         corners = [
+#             (x, y),           # top-left
+#             (x + w, y),       # top-right
+#             (x + w, y + h),   # bottom-right
+#             (x, y + h)        # bottom-left
+#         ]
+#         warped_obstacles.append(corners)
+
+#     # Optionally save
+#     if save_path is not None:
+#         with open(save_path, "w") as f:
+#             for corners in warped_obstacles:
+#                 line = ",".join(f"({x},{y})" for (x, y) in corners)
+#                 f.write(line + "\n")
+
+#     return warped_obstacles
+
+def detect_obstacles(
+    img_path: str = "Data/frame_img.png",
+    prompt: str = "Blue Circles",
+    save_path: str | None = None,
+    sections: Union[int, Tuple[int, int]] = 1,
+):
+    """
+    Detect obstacles in an image, optionally by dividing it into sections.
+
+    Args:
+        img_path: Path to the input image.
+        prompt: Text prompt passed to `detect_and_list(frame, prompt)`.
+        save_path: If provided, write obstacle corners per line to this file.
+        sections:
+            - int N: split image into N vertical strips (1 x N).
+            - tuple (rows, cols): split image into a grid.
+
+    Returns:
+        List[List[Tuple[int, int]]]: list of obstacles, each as 4 (x, y) corners
+                                     in full-image coordinates: TL, TR, BR, BL.
+    """
+    frame = cv2.imread(img_path)
+    if frame is None:
+        raise FileNotFoundError(f"Could not read image at '{img_path}'")
+
+    H, W = frame.shape[:2]
+
+    # Normalize sections to (rows, cols)
+    if isinstance(sections, int):
+        if sections < 1:
+            raise ValueError("sections must be >= 1")
+        rows, cols = 1, sections
+    else:
+        if not (isinstance(sections, (tuple, list)) and len(sections) == 2):
+            raise ValueError("sections must be an int or a (rows, cols) tuple")
+        rows, cols = int(sections[0]), int(sections[1])
+        if rows < 1 or cols < 1:
+            raise ValueError("rows and cols in sections must be >= 1")
+
+    merged_obstacles: List[List[Tuple[int, int]]] = []
+
+    # Compute tile bounds and run detection per tile
+    for r in range(rows):
+        # vertical bounds
+        y0 = (H * r) // rows
+        y1 = (H * (r + 1)) // rows if r < rows - 1 else H
+
+        for c in range(cols):
+            # horizontal bounds
+            x0 = (W * c) // cols
+            x1 = (W * (c + 1)) // cols if c < cols - 1 else W
+
+            tile = frame[y0:y1, x0:x1]
+            if tile.size == 0:
+                continue
+
+            # Your existing detector: returns list of dicts with "bbox" = [x, y, w, h]
+            objects, _ = detect_and_list(tile, prompt)
+
+            # Offset local tile bboxes into global image coords and store as corners
+            for obj in objects:
+                x, y, w, h = obj["bbox"]
+                gx, gy = x + x0, y + y0
+                corners = [
+                    (gx, gy),             # top-left
+                    (gx + w, gy),         # top-right
+                    (gx + w, gy + h),     # bottom-right
+                    (gx, gy + h)          # bottom-left
+                ]
+                merged_obstacles.append(corners)
 
     # Optionally save
     if save_path is not None:
         with open(save_path, "w") as f:
-            for corners in warped_obstacles:
+            for corners in merged_obstacles:
                 line = ",".join(f"({x},{y})" for (x, y) in corners)
                 f.write(line + "\n")
 
-    return warped_obstacles
+    return merged_obstacles
 
 
 # def detect_arena(img_path="Data/frame_img.png", prompt="Blue Circles", save_path=None):

@@ -142,10 +142,17 @@ def overlay_obstacles(frame, obstacles_path="Data/obstacles.txt"):
                 parts = list(map(int, line.split(",")))
                 if len(parts) == 8:
                     corners = [(parts[i], parts[i+1]) for i in range(0, 8, 2)]
-                    cv2.fillPoly(overlay, [np.array(corners, dtype=np.int32)], (0, 0, 255))
+                    cv2.polylines(
+                        overlay,
+                        [np.array(corners, dtype=np.int32)],
+                        isClosed=True,
+                        color=(0, 0, 255),   # red
+                        thickness=2          # thin line (adjust thickness as needed)
+                    )
     except Exception as e:
         print(f"[ERROR] Could not read obstacles from '{obstacles_path}': {e}")
     return overlay
+
 
 def show_frame_with_overlay(parent, frame, arena_path="Data/arena_corners.txt", obstacles_path="Data/obstacles.txt"):
     overlay = frame.copy()

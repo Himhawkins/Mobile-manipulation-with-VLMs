@@ -128,6 +128,7 @@ class DashboardApp(ctk.CTk):
         self.stop_event = threading.Event()
 
         self.current_frame = None
+        self.current_list_of_frames = None
         self.arena_settings = load_arena_settings()
         self.caps = open_all_cameras(self.arena_settings)
 
@@ -154,6 +155,7 @@ class DashboardApp(ctk.CTk):
 
         stitched, processed_frames, pose = find_robot_in_arena(aruco_id, self.arena_settings, self.caps, save_path="Data/robot_pos.txt")
         self.current_frame = stitched
+        self.current_list_of_frames = processed_frames
         if pose:
             final_x, final_y, final_theta = pose
             d_frame = draw_robot_pose(stitched, final_x, final_y, final_theta)
