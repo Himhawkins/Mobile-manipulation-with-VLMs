@@ -132,25 +132,55 @@ def open_settings_popup(app):
     ctk.CTkButton(btn_frame, text="Save", command=save_settings).pack(side="left", padx=10)
     ctk.CTkButton(btn_frame, text="Cancel", command=close_popup).pack(side="right", padx=10)
 
-def overlay_obstacles(frame, obstacles_path="Data/obstacles.txt"):
+def overlay_obstacles(
+    frame,
+    obstacles_path="Data/obstacles.txt",
+    realtime_obstacles_path="Data/realtime_obstacles.txt",
+    thickness=2
+):
+    """
+    Draws thin rectangles for:
+      - Static obstacles from `obstacles_path` in RED
+      - Realtime obstacles from `realtime_obstacles_path` in BLUE
+
+    Each line in the files should be:
+      (x1,y1),(x2,y2),(x3,y3),(x4,y4)
+    """
     overlay = frame.copy()
 
-    try:
-        with open(obstacles_path, "r") as f:
-            for line in f:
-                line = line.strip().replace("(", "").replace(")", "")
-                parts = list(map(int, line.split(",")))
-                if len(parts) == 8:
-                    corners = [(parts[i], parts[i+1]) for i in range(0, 8, 2)]
+    def _draw_from_file(path, color):
+        try:
+            with open(path, "r") as f:
+                for line in f:
+                    s = line.strip().replace("(", "").replace(")", "")
+                    if not s:
+                        continue
+                    parts = s.split(",")
+                    if len(parts) != 8:
+                        continue  # skip malformed lines
+                    try:
+                        nums = list(map(int, parts))
+                    except ValueError:
+                        continue
+                    corners = [(nums[i], nums[i+1]) for i in range(0, 8, 2)]
                     cv2.polylines(
                         overlay,
                         [np.array(corners, dtype=np.int32)],
                         isClosed=True,
-                        color=(0, 0, 255),   # red
-                        thickness=2          # thin line (adjust thickness as needed)
+                        color=color,
+                        thickness=thickness
                     )
-    except Exception as e:
-        print(f"[ERROR] Could not read obstacles from '{obstacles_path}': {e}")
+        except FileNotFoundError:
+            # Silent if file not present (common during startup); comment in if you want logs.
+            # print(f"[WARN] Obstacles file not found: {path}")
+            pass
+        except Exception as e:
+            print(f"[ERROR] Could not read obstacles from '{path}': {e}")
+
+    # Static (red) and realtime (blue)
+    _draw_from_file(obstacles_path, (0, 0, 255))       # red (BGR)
+    _draw_from_file(realtime_obstacles_path, (255, 0, 0))  # blue (BGR)
+
     return overlay
 
 

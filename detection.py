@@ -1,21 +1,33 @@
 #!/usr/bin/env python3
-import cv2
+import os
 import moondream as md
+import cv2
 import numpy as np
 from PIL import Image
 from dotenv import load_dotenv
-import os
-from Functions.Library.warping import get_warped_image, unwarp_points
-from typing import List, Tuple, Union
+from typing import List, Tuple, Union, Optional
+
+# If you use these elsewhere in your project, keep them imported:
+# from Functions.Library.warping import get_warped_image, unwarp_points
+
+# ============================================================
+# SECTION A: MoonDream detector utilities (from your detection.py)
+# ============================================================
 
 class ObjectDetector:
-    def __init__(self, prompt="black rectangles") -> None:
+    """
+    VLM (MoonDream) object detector that returns a list of obstacles with bboxes.
+    """
+    def __init__(self, prompt: str = "black rectangles") -> None:
+        if md is None:
+            raise ImportError("moondream not installed. `pip install moondream`")
         load_dotenv()
         self.api_key = os.getenv("MOONDREAM_API_KEY")
         self.model  = md.vl(api_key=self.api_key)
         self.prompt = prompt
 
     def detect_objects(self, image):
+        # Normalize input to PIL
         if isinstance(image, np.ndarray):
             pil_img = Image.fromarray(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
         elif isinstance(image, Image.Image):
@@ -51,48 +63,24 @@ def detect_and_list(image, prompt):
     count = len(obstacles)
     return obstacles, count
 
-def detect_and_get_centroids(frame, prompt="Blue Cricles", save_path=None):
+def detect_and_get_centroids(frame, prompt="Blue Circles", save_path=None):
     objects, _ = detect_and_list(frame, prompt)
     centroids = [o["centroid"] for o in objects]
     if save_path is not None:
-            with open(save_path, "w") as f:
-                for x, y in centroids:
-                    f.write(f"{x},{y}\n")
+        with open(save_path, "w") as f:
+            for x, y in centroids:
+                f.write(f"{x},{y}\n")
     return centroids
 
-def detect_and_get_bbox(img_path="Data/frame_img.png", prompt="Blue Cricles", save_path=None):
+def detect_and_get_bbox(img_path="Data/frame_img.png", prompt="Blue Circles", save_path=None):
     frame = cv2.imread(img_path)
     objects, _ = detect_and_list(frame, prompt)
     obstacles = [o["bbox"] for o in objects]
     if save_path is not None:
-            with open(save_path, "w") as f:
-                for x, y, w, h in obstacles:
-                    f.write(f"{x},{y},{w},{h}\n")
+        with open(save_path, "w") as f:
+            for x, y, w, h in obstacles:
+                f.write(f"{x},{y},{w},{h}\n")
     return obstacles
-
-# def detect_obstacles(img_path="Data/frame_img.png", prompt="Blue Circles", save_path=None):
-#     frame = cv2.imread(img_path)
-#     objects, _ = detect_and_list(frame, prompt)
-
-#     # Convert bbox to corner coordinates
-#     warped_obstacles = []
-#     for x, y, w, h in [o["bbox"] for o in objects]:
-#         corners = [
-#             (x, y),           # top-left
-#             (x + w, y),       # top-right
-#             (x + w, y + h),   # bottom-right
-#             (x, y + h)        # bottom-left
-#         ]
-#         warped_obstacles.append(corners)
-
-#     # Optionally save
-#     if save_path is not None:
-#         with open(save_path, "w") as f:
-#             for corners in warped_obstacles:
-#                 line = ",".join(f"({x},{y})" for (x, y) in corners)
-#                 f.write(line + "\n")
-
-#     return warped_obstacles
 
 def detect_obstacles(
     img_path: str = "Data/frame_img.png",
@@ -101,19 +89,8 @@ def detect_obstacles(
     sections: Union[int, Tuple[int, int]] = 1,
 ):
     """
-    Detect obstacles in an image, optionally by dividing it into sections.
-
-    Args:
-        img_path: Path to the input image.
-        prompt: Text prompt passed to `detect_and_list(frame, prompt)`.
-        save_path: If provided, write obstacle corners per line to this file.
-        sections:
-            - int N: split image into N vertical strips (1 x N).
-            - tuple (rows, cols): split image into a grid.
-
-    Returns:
-        List[List[Tuple[int, int]]]: list of obstacles, each as 4 (x, y) corners
-                                     in full-image coordinates: TL, TR, BR, BL.
+    Detect obstacles with the VLM by dividing the image into sections (optional).
+    Returns list of 4-corner rectangles in full-image coords.
     """
     frame = cv2.imread(img_path)
     if frame is None:
@@ -137,12 +114,9 @@ def detect_obstacles(
 
     # Compute tile bounds and run detection per tile
     for r in range(rows):
-        # vertical bounds
         y0 = (H * r) // rows
         y1 = (H * (r + 1)) // rows if r < rows - 1 else H
-
         for c in range(cols):
-            # horizontal bounds
             x0 = (W * c) // cols
             x1 = (W * (c + 1)) // cols if c < cols - 1 else W
 
@@ -150,7 +124,6 @@ def detect_obstacles(
             if tile.size == 0:
                 continue
 
-            # Your existing detector: returns list of dicts with "bbox" = [x, y, w, h]
             objects, _ = detect_and_list(tile, prompt)
 
             # Offset local tile bboxes into global image coords and store as corners
@@ -158,14 +131,13 @@ def detect_obstacles(
                 x, y, w, h = obj["bbox"]
                 gx, gy = x + x0, y + y0
                 corners = [
-                    (gx, gy),             # top-left
-                    (gx + w, gy),         # top-right
-                    (gx + w, gy + h),     # bottom-right
-                    (gx, gy + h)          # bottom-left
+                    (gx, gy),             # TL
+                    (gx + w, gy),         # TR
+                    (gx + w, gy + h),     # BR
+                    (gx, gy + h)          # BL
                 ]
                 merged_obstacles.append(corners)
 
-    # Optionally save
     if save_path is not None:
         with open(save_path, "w") as f:
             for corners in merged_obstacles:
@@ -174,59 +146,22 @@ def detect_obstacles(
 
     return merged_obstacles
 
-
-# def detect_arena(img_path="Data/frame_img.png", prompt="Blue Circles", save_path=None):
-#     frame = cv2.imread(img_path)
-#     corners, count = detect_and_list(frame, prompt)
-#     centroids = [tuple(o["centroid"]) for o in corners]
-    
-#     if len(centroids) != 4:
-#         raise ValueError(f"Expected 4 markers, but found {len(centroids)}")
-    
-#     # --- sort into UL, LL, LR, UR ---
-#     # 1. sort by y (row): top two first, bottom two last
-#     centroids_sorted = sorted(centroids, key=lambda p: p[1])
-#     top_two    = centroids_sorted[:2]
-#     bottom_two = centroids_sorted[2:]
-#     # 2. within each pair, sort by x (column)
-#     top_left,    top_right    = sorted(top_two,    key=lambda p: p[0])
-#     bottom_left, bottom_right = sorted(bottom_two, key=lambda p: p[0])
-#     ordered = [top_left, bottom_left, bottom_right, top_right]
-#     # ---------------------------------
-    
-#     if save_path:
-#         with open(save_path, "w") as f:
-#             for x, y in ordered:
-#                 f.write(f"{x},{y}\n")
-    
-#     return ordered
-
-def detect_arena(img_path, save_path=None):
-    # 1. Read the image to get its dimensions
+def detect_arena(img_path="Data/frame_img.png", save_path=None):
     frame = cv2.imread(img_path)
     if frame is None:
         raise FileNotFoundError(f"Could not read image at path: {img_path}")
-    
-    # Get height and width from the image's shape
     height, width = frame.shape[:2]
 
-    # 2. Define the four corner coordinates
-    # Note: Coordinates are in (x, y) format
     top_left     = (0, 0)
     top_right    = (width - 1, 0)
     bottom_left  = (0, height - 1)
     bottom_right = (width - 1, height - 1)
-    
-    # 3. Arrange the corners in the specified order
     ordered_corners = [top_left, bottom_left, bottom_right, top_right]
 
-    # 4. Optionally save the ordered corners to the specified file
     if save_path:
-        print(f"Saving frame corners to {save_path}...")
         with open(save_path, "w") as f:
             for x, y in ordered_corners:
                 f.write(f"{x},{y}\n")
-    
     return ordered_corners
 
 def detect_objects(img_path="Data/frame_img.png", prompt_list=["A","B","C"], save_path=None):
@@ -264,14 +199,247 @@ def detect_robot_pose(frame, aruco_id, save_path=None):
 def save_img_to_path(frame, save_path="Data/frame_img.png"):
     cv2.imwrite(save_path, frame)
 
-def main():
-    IMG_PATH = "Data/live.jpg"
-    #frame = cv2.imread(IMG_PATH)
-    #save_img_to_path(frame, save_path="Data/frame_img.png")
-    g=detect_objects(IMG_PATH, "Blue Circles", save_path="Data/arena_corners.txt")
-    #detect_and_get_bbox(img_path=IMG_PATH, prompt="Obstacles Black Rectangles", save_path="Data/obstacles.txt")
-    print("lol", g)
+# ============================================================
+# SECTION B: Background-difference realtime obstacle utilities
+#           (from your realtime_obs_det_utils.py)
+# ============================================================
+
+BLUR_KSIZE_BG = (5, 5)
+DIFF_THRESH_BG = 40
+MIN_AREA_BG = 300
+MORPH_KERNEL_BG = (3, 3)
+
+class ObstacleDetectorBG:
+    """
+    Maintains a reference (background) image and detects 'unknown obstacles'
+    by differencing frames against the reference.
+    """
+    def __init__(self,
+                 blur_ksize: Tuple[int, int] = BLUR_KSIZE_BG,
+                 diff_thresh: int = DIFF_THRESH_BG,
+                 min_area: int = MIN_AREA_BG,
+                 morph_kernel: Tuple[int, int] = MORPH_KERNEL_BG):
+        self.blur_ksize = blur_ksize
+        self.diff_thresh = diff_thresh
+        self.min_area = min_area
+        self.kernel = cv2.getStructuringElement(cv2.MORPH_RECT, morph_kernel)
+        self._base: Optional[np.ndarray] = None  # float32 background
+
+    def _preprocess(self, img: np.ndarray) -> np.ndarray:
+        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        gray = cv2.GaussianBlur(gray, self.blur_ksize, 0)
+        return gray
+
+    def update_reference(self, frame_bgr: np.ndarray) -> None:
+        """Set/refresh the background reference from a BGR frame."""
+        gray = self._preprocess(frame_bgr)
+        self._base = gray.astype(np.float32)
+
+    def detect(self, frame_bgr: np.ndarray) -> Tuple[List[Tuple[int,int,int,int]], np.ndarray, np.ndarray]:
+        """
+        Detect obstacles vs the stored reference.
+
+        Returns:
+            boxes: list of (x, y, w, h)
+            diff:  absdiff image (uint8)
+            mask:  binary mask after processing (uint8 {0,255})
+        """
+        if self._base is None:
+            raise RuntimeError("Reference image not set. Call update_reference_image() first.")
+
+        gray = self._preprocess(frame_bgr)
+        base_uint8 = cv2.convertScaleAbs(self._base)
+
+        # Difference and threshold
+        diff = cv2.absdiff(gray, base_uint8)
+        _, mask = cv2.threshold(diff, self.diff_thresh, 255, cv2.THRESH_BINARY)
+
+        # Morphology
+        mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, self.kernel, iterations=1)
+        mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, self.kernel, iterations=1)
+        mask = cv2.dilate(mask, self.kernel, iterations=1)
+
+        # Contours -> boxes
+        contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        boxes: List[Tuple[int,int,int,int]] = []
+        for c in contours:
+            area = cv2.contourArea(c)
+            if area < self.min_area:
+                continue
+            x, y, w, h = cv2.boundingRect(c)
+            boxes.append((x, y, w, h))
+
+        return boxes, diff, mask
+
+    @staticmethod
+    def _ensure_dir(path: str) -> None:
+        if path:
+            d = os.path.dirname(path)
+            if d:
+                os.makedirs(d, exist_ok=True)
+
+    @staticmethod
+    def _rect_to_corners(x: int, y: int, w: int, h: int) -> List[Tuple[int,int]]:
+        # TL, TR, BR, BL
+        return [(x, y), (x + w, y), (x + w, y + h), (x, y + h)]
+
+    def save_obstacles(self, boxes: List[Tuple[int,int,int,int]], save_path: str) -> None:
+        """
+        Overwrites save_path with one rectangle per line:
+        (x1,y1),(x2,y2),(x3,y3),(x4,y4)
+        """
+        self._ensure_dir(save_path)
+        with open(save_path, "w") as f:
+            for (x, y, w, h) in boxes:
+                corners = self._rect_to_corners(x, y, w, h)
+                line = ",".join(f"({cx},{cy})" for (cx, cy) in corners)
+                f.write(line + "\n")
+
+# Singleton background detector instance
+_bg_detector = ObstacleDetectorBG()
+
+def _read_robot_xy(robot_path: str = "Data/robot_pos.txt"):
+    """
+    Reads robot pose from file formatted as 'x,y,theta'. Returns (x, y) as ints.
+    If file is missing or malformed, returns None.
+    """
+    try:
+        with open(robot_path, "r") as f:
+            line = f.readline().strip()
+        if not line:
+            return None
+        parts = line.replace("(", "").replace(")", "").split(",")
+        if len(parts) < 2:
+            return None
+        x = int(float(parts[0].strip()))
+        y = int(float(parts[1].strip()))
+        return (x, y)
+    except Exception:
+        return None
+
+def update_reference_image(frame_bgr: np.ndarray, ref_path: str = "Data/frame_img.png") -> None:
+    """Save the current frame as the new reference image."""
+    os.makedirs(os.path.dirname(ref_path), exist_ok=True)
+    cv2.imwrite(ref_path, frame_bgr)
+
+def detect_realtime_obstacles(frame_bgr: np.ndarray,
+                              save_path: str = "Data/realtime_obstacles.txt",
+                              ref_path: str = "Data/frame_img.png",
+                              robot_path: str = "Data/robot_pos.txt",
+                              robot_padding: int = 0):
+    """
+    Compare current frame against reference image on disk and save obstacles.
+    Skips any obstacle whose bbox contains the current robot (x,y).
+
+    Args:
+        frame_bgr: BGR frame from OpenCV.
+        save_path: where to write TL,TR,BR,BL per line.
+        ref_path:  background/reference image path.
+        robot_path: file containing 'x,y,theta'.
+        robot_padding: optional pixels to shrink the bbox by before testing
+                       containment (helps avoid excluding near-robot blobs).
+
+    Returns:
+        boxes: kept boxes [(x,y,w,h), ...]
+        diff:  absdiff image (uint8)
+        mask:  binary mask after processing (uint8 {0,255})
+    """
+    # load reference
+    ref = cv2.imread(ref_path, cv2.IMREAD_GRAYSCALE)
+    if ref is None:
+        raise RuntimeError(f"No reference image found at {ref_path}. Call update_reference_image first.")
+    ref = cv2.GaussianBlur(ref, BLUR_KSIZE_BG, 0)
+
+    # preprocess current
+    gray = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2GRAY)
+    gray = cv2.GaussianBlur(gray, BLUR_KSIZE_BG, 0)
+
+    # difference + threshold
+    diff = cv2.absdiff(gray, ref)
+    _, mask = cv2.threshold(diff, DIFF_THRESH_BG, 255, cv2.THRESH_BINARY)
+
+    # morphology
+    k = cv2.getStructuringElement(cv2.MORPH_RECT, MORPH_KERNEL_BG)
+    mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, k, iterations=1)
+    mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, k, iterations=1)
+    mask = cv2.dilate(mask, k, iterations=1)
+
+    # read robot position (optional)
+    robot_xy = _read_robot_xy(robot_path)
+
+    def _contains_robot(x, y, w, h):
+        if robot_xy is None:
+            return False
+        rx, ry = robot_xy
+        # Optionally shrink bbox by robot_padding to avoid over-filtering
+        x0 = x + robot_padding
+        y0 = y + robot_padding
+        x1 = x + w - robot_padding
+        y1 = y + h - robot_padding
+        return (x0 <= rx <= x1) and (y0 <= ry <= y1)
+
+    # contours
+    contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+    kept_boxes = []
+    os.makedirs(os.path.dirname(save_path), exist_ok=True)
+    with open(save_path, "w") as f:
+        for c in contours:
+            if cv2.contourArea(c) < MIN_AREA_BG:
+                continue
+            x, y, w, h = cv2.boundingRect(c)
+
+            # Skip boxes that contain the robot position
+            if _contains_robot(x, y, w, h):
+                continue
+
+            kept_boxes.append((x, y, w, h))
+            corners = [(x, y), (x + w, y), (x + w, y + h), (x, y + h)]
+            line = ",".join(f"({cx},{cy})" for (cx, cy) in corners)
+            f.write(line + "\n")
+
+    return kept_boxes, diff, mask
+
+# ============================================================
+# Optional demo (press 'b' to set reference, 'q' to quit)
+# ============================================================
 if __name__ == "__main__":
-    
-    d_objects = detect_objects(img_path='Data/frame_img.png', save_path='Targets/target.txt', prompt_list=['Orange'])
-    print(d_objects)
+    CAM_INDEX = 2
+    cap = cv2.VideoCapture(CAM_INDEX)
+    if not cap.isOpened():
+        raise RuntimeError("Could not open camera")
+
+    print("Press 'b' to set/update reference. Press 'q' to quit.")
+    have_ref = False
+
+    while True:
+        ok, frame = cap.read()
+        if not ok:
+            break
+
+        disp = frame.copy()
+
+        if have_ref:
+            try:
+                boxes, diff, mask = detect_realtime_obstacles(frame, "Data/realtime_obstacles.txt")
+                for (x, y, w, h) in boxes:
+                    cv2.rectangle(disp, (x, y), (x+w, y+h), (0, 0, 255), 2)
+                cv2.imshow("diff", diff)
+                cv2.imshow("mask", mask)
+            except RuntimeError as e:
+                cv2.putText(disp, str(e), (10, 30),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 200, 255), 2)
+
+        cv2.putText(disp, "b: set reference | q: quit", (10, 25),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
+        cv2.imshow("frame", disp)
+
+        k = cv2.waitKey(1) & 0xFF
+        if k == ord('q'):
+            break
+        elif k == ord('b'):
+            update_reference_image(frame)
+            have_ref = True
+
+    cap.release()
+    cv2.destroyAllWindows()

@@ -2,7 +2,7 @@ import threading
 import customtkinter as ctk
 
 from ui_utils import CTkMessageBox, get_app_settings
-from detection import detect_arena, detect_and_get_bbox, detect_obstacles, save_img_to_path
+from detection import detect_arena, detect_obstacles, save_img_to_path
 from Functions.Library.Agent.gemini import call_gemini_agent
 from controller import exec_bot_with_thread
 from motion import move_robot_with_thread

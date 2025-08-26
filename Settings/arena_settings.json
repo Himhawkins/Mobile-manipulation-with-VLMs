@@ -7,7 +7,7 @@
       "width": 500,
       "height": 500,
       "rotation": 180,
-      "overlap": 100,
+      "overlap": 50,
       "topLeft": [
         36,
         21
@@ -30,7 +30,7 @@
       "width": 500,
       "height": 500,
       "rotation": 180,
-      "overlap": 100,
+      "overlap": 50,
       "topLeft": [
         138,
         77
@@ -53,7 +53,7 @@
       "width": 500,
       "height": 500,
       "rotation": 180,
-      "overlap": 100,
+      "overlap": 50,
       "topLeft": [
         292,
         94

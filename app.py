@@ -12,6 +12,7 @@ from thread_utils import run_in_thread, disable_button, enable_button, callibrat
 from ui_utils import overlay_obstacles, draw_path_on_frame
 from arena_utils import refresh_cameras, launch_grid_popup, load_arena_settings, open_all_cameras
 from arena_stitching import find_robot_in_arena
+from detection import detect_realtime_obstacles
 
 class DashboardApp(ctk.CTk):
     def __init__(self):
@@ -156,6 +157,7 @@ class DashboardApp(ctk.CTk):
         stitched, processed_frames, pose = find_robot_in_arena(aruco_id, self.arena_settings, self.caps, save_path="Data/robot_pos.txt")
         self.current_frame = stitched
         self.current_list_of_frames = processed_frames
+        detect_realtime_obstacles(frame_bgr=stitched, save_path="Data/realtime_obstacles.txt", ref_path="Data/frame_img.png")
         if pose:
             final_x, final_y, final_theta = pose
             d_frame = draw_robot_pose(stitched, final_x, final_y, final_theta)
