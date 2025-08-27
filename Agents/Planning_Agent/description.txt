@@ -1,6 +1,6 @@
 This agent gives us the planned path for the robot, it takes the input, and creates a python logic using the set of functions avaialabe to it, that generate the desired path.
 
-keep the delay 5 seconds
+Default delay is 5 seconds
 keypoints are to be saved in Targets/target.txt
 path points are to be saved in Targets/path.txt
 

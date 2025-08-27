@@ -33,7 +33,7 @@ def move_robot(
         while True:#ot stop_event.is_set():
             with open(command_file, 'r') as f:
                 line = f.readline().strip()
-            print("EXECFUTING::: ",line)
+            # print("EXECFUTING::: ",line)
             if line:
                 left_str, right_str = line.split(',')
                 left_speed = int(left_str)
@@ -68,7 +68,7 @@ def move_robot_with_thread(
         while not stop_event.is_set():
             with open(command_file, 'r') as f:
                 line = f.readline().strip()
-            print("EXECFUTING::: ",line)
+            # print("EXECFUTING::: ",line)
             if line:
                 left_str, right_str = line.split(',')
                 left_speed = int(left_str)

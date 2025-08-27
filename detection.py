@@ -335,7 +335,7 @@ def detect_realtime_obstacles(frame_bgr: np.ndarray,
         save_path: where to write TL,TR,BR,BL per line.
         ref_path:  background/reference image path.
         robot_path: file containing 'x,y,theta'.
-        robot_padding: optional pixels to shrink the bbox by before testing
+        robot_padding: optional pixels to expand the bbox by before testing
                        containment (helps avoid excluding near-robot blobs).
 
     Returns:
@@ -371,10 +371,10 @@ def detect_realtime_obstacles(frame_bgr: np.ndarray,
             return False
         rx, ry = robot_xy
         # Optionally shrink bbox by robot_padding to avoid over-filtering
-        x0 = x + robot_padding
-        y0 = y + robot_padding
-        x1 = x + w - robot_padding
-        y1 = y + h - robot_padding
+        x0 = x - robot_padding
+        y0 = y - robot_padding
+        x1 = x + w + robot_padding
+        y1 = y + h + robot_padding
         return (x0 <= rx <= x1) and (y0 <= ry <= y1)
 
     # contours

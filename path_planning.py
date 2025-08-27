@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import os
+import math
 import cv2
 import numpy as np
 import matplotlib.pyplot as plt
@@ -32,6 +33,28 @@ def find_path_with_offset(planner, current_pos, target_pos, offset):
     # If no path was found after checking all four points
     return None, None
 
+def _densify_segment(p0, p1, step_px=10):
+    """
+    Return a list of points from p0 to p1 spaced ~step_px apart (inclusive of p1).
+    p0, p1 are (x, y). Coordinates are rounded to ints.
+    """
+    x0, y0 = p0
+    x1, y1 = p1
+    dx, dy = (x1 - x0), (y1 - y0)
+    dist = math.hypot(dx, dy)
+    if dist <= 1e-6:
+        return [p0]  # same point
+
+    n_steps = max(1, int(dist // step_px))  # number of intervals
+    pts = []
+    for k in range(n_steps):
+        t = k / n_steps
+        x = int(round(x0 + t * dx))
+        y = int(round(y0 + t * dy))
+        pts.append((x, y))
+    pts.append((int(round(x1)), int(round(y1))))  # ensure endpoint included
+    return pts
+
 def trace_targets(
     input_target_list,
     output_target_path="Targets/path.txt",
@@ -40,29 +63,35 @@ def trace_targets(
     spacing=50,
     delay=0,
     out_path="Data/trace_overlay.png",
-    offset=100  # <-- New changeable offset argument
+    offset=100,
+    linear_step=10,      # <-- NEW: step size (px) for straight-line densification
 ):
-    # Sections 1, 2, 3, 4 (Loading, Setup, etc.) remain the same
-    # ... (paste the setup code from your previous version here) ...
     data = read_data(data_folder)
     if data is None:
         raise RuntimeError(f"Could not read data from '{data_folder}'")
+
     arena = [tuple(map(int, row)) for row in data['arena_corners']]
     polygon_obs = [ [tuple(map(int, pt)) for pt in poly] for poly in data['obstacles']]
     sx, sy, _ = data['robot_pos']
     if start is None:
         start = (int(sx), int(sy))
+
     frame_path = os.path.join(data_folder, "frame_img.png")
     frame = cv2.imread(frame_path)
     if frame is None:
         raise FileNotFoundError(f"Could not load image at '{frame_path}'")
     h, w = frame.shape[:2]
+
     obs = [{"corners": poly} for poly in polygon_obs]
     planner = PathPlanner(obs, (h, w), arena)
+
+    # grow obstacles by 'spacing' to create a safety margin
     k = 2 * int(spacing) + 1
     kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (k, k))
     planner.mask = cv2.dilate(planner.mask, kernel)
+
     targets = [(int(x), int(y)) for x,y in input_target_list]
+
     if isinstance(delay, (int, float)):
         delays = [int(delay)] * len(targets)
     else:
@@ -70,49 +99,59 @@ def trace_targets(
         if len(delays) != len(targets):
             raise ValueError("Length of 'delay' must match number of targets")
 
-    # --- Pathfinding Logic with Your Offset Method ---
     paths = []
     successful_delays = []
     current = start
-    
+
     for i, tgt in enumerate(targets):
         path = planner.find_obstacle_aware_path(current, tgt, 10)
         final_tgt = tgt
-        
+
         if not path:
             print(f"Segment {i+1}: {current} → {tgt} is UNREACHABLE.")
-            print(f" -> Target is inside an obstacle. Trying {offset}px offset points...")
+            print(f" -> Target may be blocked. Trying {offset}px offset points...")
             path, final_tgt = find_path_with_offset(planner, current, tgt, offset)
 
-        # If a path was found (either original or adjusted), add it
         if path:
+            # === NEW: if the path is just a straight segment [start, end],
+            # resample it into intermediate points every ~linear_step pixels.
+            if len(path) == 2:
+                p0, p1 = path[0], path[1]
+                path = _densify_segment(p0, p1, step_px=linear_step)
+
             print(f"Segment {i+1}: {current} → {final_tgt} [{len(path)} steps]")
             paths.append(path)
             successful_delays.append(delays[i])
             current = final_tgt
         else:
             print(f" -> SKIPPING target {tgt} as no path could be generated.")
-            
-    # Sections 5 and 6 (Plotting and Saving) remain the same
-    # ... (paste the plotting and saving code from your previous version here) ...
+
+    # ---------- Plotting (unchanged) ----------
     img_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
     fig, ax = plt.subplots(figsize=(10, 8))
     ax.imshow(img_rgb)
     ax.axis("off")
     ax.add_patch(Polygon(arena, closed=True, fill=False, edgecolor='yellow', linewidth=2))
+
     for poly in polygon_obs:
         ax.add_patch(Polygon(poly, closed=True, facecolor='red', alpha=0.3, edgecolor='white'))
+
     ax.plot(start[0], start[1], 'o', color='cyan', markersize=10, label='robot')
+
     if targets:
         txs, tys = zip(*targets)
         ax.scatter(txs, tys, s=80, facecolors='none', edgecolors='white', label='targets')
+
     for path in paths:
         xs, ys = zip(*path)
         ax.plot(xs, ys, '-', linewidth=2, color='lime')
+
     ax.legend(loc='upper right')
     plt.tight_layout()
     fig.savefig(out_path, bbox_inches='tight')
     plt.close(fig)
+
+    # ---------- Save to file (unchanged logic; now writes densified points) ----------
     with open(output_target_path, "w") as f:
         for i, path in enumerate(paths):
             for j, (x, y) in enumerate(path):
@@ -120,14 +159,14 @@ def trace_targets(
                     f.write(f"{x},{y},{successful_delays[i]}\n")
                 else:
                     f.write(f"{x},{y},{0}\n")
+
     return f"Path Planned! and saved to {output_target_path}"
 
 
 if __name__ == "__main__":
     DATA_FOLDER  = "Data"
     SPACING      = 20
-    input_list = [[1464.0, 220.0], [34.0, 88.0]]
-    # input_list = [[1394.0, 220.0], [104.0, 88.0]]
+    input_list = [[705.0, 228.0], [1163.0, 231.0]]
 
     trace_targets(
         input_target_list=input_list,

@@ -157,7 +157,11 @@ class DashboardApp(ctk.CTk):
         stitched, processed_frames, pose = find_robot_in_arena(aruco_id, self.arena_settings, self.caps, save_path="Data/robot_pos.txt")
         self.current_frame = stitched
         self.current_list_of_frames = processed_frames
-        detect_realtime_obstacles(frame_bgr=stitched, save_path="Data/realtime_obstacles.txt", ref_path="Data/frame_img.png")
+        detect_realtime_obstacles(frame_bgr=stitched,
+                                  save_path="Data/realtime_obstacles.txt",
+                                  ref_path="Data/frame_img.png",
+                                  robot_path="Data/robot_pos.txt",
+                                  robot_padding=10)
         if pose:
             final_x, final_y, final_theta = pose
             d_frame = draw_robot_pose(stitched, final_x, final_y, final_theta)
