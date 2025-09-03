@@ -153,12 +153,14 @@ def trace_targets(
 
     # ---------- Save to file (unchanged logic; now writes densified points) ----------
     with open(output_target_path, "w") as f:
+        f.write(f"{int(sx)},{int(sy)},{0}\n")
         for i, path in enumerate(paths):
             for j, (x, y) in enumerate(path):
                 if j == len(path) - 1:
                     f.write(f"{x},{y},{successful_delays[i]}\n")
                 else:
-                    f.write(f"{x},{y},{0}\n")
+                    # f.write(f"{x},{y},{0}\n")
+                    pass
 
     return f"Path Planned! and saved to {output_target_path}"
 

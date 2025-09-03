@@ -5,7 +5,7 @@ import threading
 
 # Import from new helper modules
 from ui_utils import CTkMessageBox, CheckGroup, get_app_settings, open_settings_popup
-from camera_utils import display_frame, draw_robot_pose
+from camera_utils import display_frame, draw_robot_pose, draw_robot_pose_with_sprite
 from agent_utils import save_agent_to_disk, get_agent_folders, get_agent_functions, get_all_functions
 from port_utils import refresh_serial_ports
 from thread_utils import run_in_thread, disable_button, enable_button, callibrate_task, run_task, toggle_execute
@@ -164,7 +164,8 @@ class DashboardApp(ctk.CTk):
                                   robot_padding=10)
         if pose:
             final_x, final_y, final_theta = pose
-            d_frame = draw_robot_pose(stitched, final_x, final_y, final_theta)
+            # d_frame = draw_robot_pose(stitched, final_x, final_y, final_theta)
+            d_frame = draw_robot_pose_with_sprite(frame=stitched, x=final_x, y=final_y, theta=final_theta, sprite="Data/robot_sprite.png", sprite_scale=0.3)
         else:
             d_frame = stitched
 

@@ -36,7 +36,7 @@ Execution Rules:
 - Use "Data/frame_img.png" as the image path for detection.
 - Save the generated path in "Targets/path.txt".
 - When multiple targets are requested, detect all of them together first and then execute tracing once at the end.
-- If the user doesn't specify the delay then keep in 5 seconds.
+- Default delay in 5 seconds.
 
 Goal:
 - Convert natural user instructions into marker-based navigation inside the supermarket, handling sections, products, and brands seamlessly.

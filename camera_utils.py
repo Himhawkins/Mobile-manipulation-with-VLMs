@@ -4,6 +4,9 @@ from PIL import Image
 import math
 import customtkinter as ctk
 
+# ---------------------------
+# Camera helpers
+# ---------------------------
 def start_camera(cam_index):
     """
     Initializes and returns an opened camera capture object.
@@ -20,12 +23,9 @@ def read_frame(cap):
 
 def display_frame(frame, target_w, target_h):
     """
-    Captures a frame from the given capture object,
-    resizes it with letterboxing to fit the given dimensions,
-    and returns a CTkImage suitable for CustomTkinter display.
+    Converts a BGR frame to a centered, letterboxed CTkImage of size (target_w, target_h).
     """
-    frame_copy = frame.copy()
-    frame_copy = cv2.cvtColor(frame_copy, cv2.COLOR_BGR2RGB)
+    frame_copy = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
     fh, fw = frame_copy.shape[:2]
 
     scale = min(target_w / fw, target_h / fh)
@@ -39,6 +39,9 @@ def display_frame(frame, target_w, target_h):
     pil_img = Image.fromarray(canvas)
     return ctk.CTkImage(light_image=pil_img, size=(target_w, target_h))
 
+# ---------------------------
+# Drawing helpers (pose)
+# ---------------------------
 def draw_robot_pose(frame, x, y, theta, corners=None, 
                     box_color=(255, 0, 0), box_thickness=2,
                     center_color=(0, 255, 0), center_radius=4,
@@ -48,28 +51,176 @@ def draw_robot_pose(frame, x, y, theta, corners=None,
     - A polygon from 4 ArUco corners (if provided)
     - A center circle at (x, y)
     - A line indicating orientation from (x, y) in direction `theta` (radians)
-
-    Parameters:
-    - frame: OpenCV BGR image
-    - x, y: center coordinates
-    - theta: orientation in radians (0 = right)
-    - corners: optional 4×2 list or np.array of ArUco marker corners
-    - color: BGR color for drawing
-    - thickness: polygon/line thickness
-    - radius: circle radius at center
-    - line_len: length of orientation line
     """
     frame_copy = frame.copy()
     if corners is not None:
         pts = np.array(corners, dtype=np.int32).reshape((-1, 1, 2))
         cv2.polylines(frame_copy, [pts], isClosed=True, color=box_color, thickness=box_thickness)
 
-    # Draw center point
+    # Center
     cv2.circle(frame_copy, (int(x), int(y)), center_radius, center_color, -1)
 
-    # Draw heading line
+    # Heading line
     x2 = int(x + line_len * math.cos(theta))
     y2 = int(y + line_len * math.sin(theta))
     cv2.line(frame_copy, (int(x), int(y)), (x2, y2), line_color, line_thickness)
 
     return frame_copy
+
+# ---------------------------
+# Sprite rotation & overlay (artifact-free)
+# ---------------------------
+def rotate_sprite_rgba_premult(rgba, angle_deg, scale=1.0):
+    """
+    Rotate an RGBA sprite using pre-multiplied alpha to avoid halos/box artifacts.
+    Expands the canvas (rotate-bound) so nothing gets cropped.
+    Returns a new RGBA (uint8).
+    """
+    h, w = rgba.shape[:2]
+
+    # Ensure 4 channels
+    if rgba.shape[2] == 3:
+        a = np.full((h, w, 1), 255, dtype=np.uint8)
+        rgba = np.concatenate([rgba, a], axis=2)
+
+    # Rotation matrix (about center)
+    cX, cY = (w / 2.0, h / 2.0)
+    M = cv2.getRotationMatrix2D((cX, cY), angle_deg, scale)
+
+    # New bounds
+    cos, sin = abs(M[0,0]), abs(M[0,1])
+    nW = int(h * sin + w * cos)
+    nH = int(h * cos + w * sin)
+    M[0,2] += (nW / 2.0) - cX
+    M[1,2] += (nH / 2.0) - cY
+
+    # Split & premultiply (RGB * A)
+    bgr = rgba[..., :3].astype(np.float32) / 255.0            # (h,w,3)
+    a2d = (rgba[..., 3].astype(np.float32) / 255.0)           # (h,w)   <-- 2D on purpose
+    bgr_pm = bgr * a2d[..., None]                             # (h,w,3)
+
+    # Rotate PM-RGB (3ch) and A (1ch) with zero border
+    bgr_pm_rot = cv2.warpAffine(
+        bgr_pm, M, (nW, nH),
+        flags=cv2.INTER_LINEAR,
+        borderMode=cv2.BORDER_CONSTANT,
+        borderValue=(0, 0, 0)
+    )
+    a_rot = cv2.warpAffine(
+        a2d, M, (nW, nH),
+        flags=cv2.INTER_LINEAR,
+        borderMode=cv2.BORDER_CONSTANT,
+        borderValue=0
+    )
+    # Ensure alpha has shape (nH, nW, 1) for broadcasting
+    a_rot = a_rot[..., None]
+
+    # Un-premultiply safely
+    eps = 1e-6
+    bgr_rot = bgr_pm_rot / np.maximum(a_rot, eps)
+
+    out = np.dstack((bgr_rot, a_rot))
+    return np.clip(out * 255.0, 0, 255).astype(np.uint8)
+
+def _overlay_rgba_on_bgr(frame_bgr, rgba, center_xy):
+    """
+    Alpha-blend an RGBA sprite centered at center_xy onto a BGR frame.
+    Returns modified frame (in-place safe).
+    """
+    fh, fw = frame_bgr.shape[:2]
+    sh, sw = rgba.shape[:2]
+    cx, cy = int(center_xy[0]), int(center_xy[1])
+
+    # Top-left placement (centered)
+    x0 = cx - sw // 2
+    y0 = cy - sh // 2
+    x1 = x0 + sw
+    y1 = y0 + sh
+
+    # Clip to frame bounds
+    x0_clip = max(0, x0); y0_clip = max(0, y0)
+    x1_clip = min(fw, x1); y1_clip = min(fh, y1)
+    if x0_clip >= x1_clip or y0_clip >= y1_clip:
+        return frame_bgr  # entirely outside
+
+    # Corresponding region in the sprite
+    sx0 = x0_clip - x0
+    sy0 = y0_clip - y0
+    sx1 = sx0 + (x1_clip - x0_clip)
+    sy1 = sy0 + (y1_clip - y0_clip)
+
+    roi = frame_bgr[y0_clip:y1_clip, x0_clip:x1_clip]
+    sprite = rgba[sy0:sy1, sx0:sx1, :]
+
+    # Split channels
+    bgr = sprite[..., :3].astype(np.float32)
+    alpha = sprite[..., 3:4].astype(np.float32) / 255.0  # (h,w,1)
+
+    # Alpha blend
+    roi[:] = (alpha * bgr + (1.0 - alpha) * roi.astype(np.float32)).astype(np.uint8)
+    return frame_bgr
+
+# ---------------------------
+# Main draw w/ sprite
+# ---------------------------
+def draw_robot_pose_with_sprite(
+    frame,
+    x, y, theta,
+    corners=None,
+    sprite=None,               # either a numpy RGBA (H,W,4) or a string path to PNG with alpha
+    sprite_scale=1.0,          # scale factor
+    box_color=(255, 0, 0), box_thickness=2,
+    center_color=(0, 255, 0), center_radius=4,
+    line_color=(0, 0, 255), line_thickness=2, line_len=20
+):
+    """
+    Overlays a rotated robot sprite centered at (x,y) aligned to theta,
+    then draws the pose graphics (corners, center, heading).
+
+    - theta in radians; 0 points toward +x (right).
+    - We rotate by (-deg(theta) - 90) so the sprite is 90° CW from default.
+    """
+    out = frame.copy()
+
+    # --- Load / prepare sprite (RGBA) ---
+    rgba = None
+    if sprite is not None:
+        if isinstance(sprite, str):
+            img = cv2.imread(sprite, cv2.IMREAD_UNCHANGED)  # keep alpha
+            if img is None:
+                raise FileNotFoundError(f"Could not load sprite image: {sprite}")
+            rgba = img
+        else:
+            rgba = sprite
+
+    if rgba is not None:
+        # Optional scaling BEFORE rotation
+        if sprite_scale != 1.0:
+            new_w = max(1, int(round(rgba.shape[1] * sprite_scale)))
+            new_h = max(1, int(round(rgba.shape[0] * sprite_scale)))
+            rgba = cv2.resize(
+                rgba, (new_w, new_h),
+                interpolation=cv2.INTER_AREA if sprite_scale < 1.0 else cv2.INTER_LINEAR
+            )
+
+        # Rotate to align with theta (90° clockwise correction)
+        angle_deg = -math.degrees(theta) - 90
+        rgba_rot = rotate_sprite_rgba_premult(rgba, angle_deg, scale=1.0)
+
+        # Composite on frame (centered at x,y)
+        _overlay_rgba_on_bgr(out, rgba_rot, (x, y))
+
+    # --- Draw extras on top ---
+    if corners is not None:
+        pts = np.array(corners, dtype=np.int32).reshape((-1, 1, 2))
+        cv2.polylines(out, [pts], isClosed=True, color=box_color, thickness=box_thickness)
+
+    # Center
+    cv2.circle(out, (int(x), int(y)), center_radius, center_color, -1)
+
+    # Heading line
+    x2 = int(x + line_len * math.cos(theta))
+    y2 = int(y + line_len * math.sin(theta))
+    cv2.line(out, (int(x), int(y)), (x2, y2), line_color, line_thickness)
+
+    return out

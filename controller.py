@@ -6,6 +6,8 @@ Now with:
 - A* PLANS on an extra-inflated mask (spacing_px + plan_spacing_boost_px)
 - Runtime checks still use spacing_px
 - Minimum-clearance check applied to BOTH straight shortcuts and A* polylines
+- FIX: no runaway waypoint index — replan when polyline is consumed, and
+       clamp/invalidate path if last waypoint reached but goal not yet reached.
 
 Tune at bottom:
     spacing_px, plan_spacing_boost_px, clearance_boost_px, Kp/*, max_lin, ...
@@ -110,7 +112,7 @@ def _parse_corners_file(path):
     except FileNotFoundError:
         pass
     except Exception as e:
-        print(f"[WARN] Could not read '{path}': {e}")
+        print(f"[WARN] Could not read '{path}]: {e}")
     return polys
 
 def _read_arena_corners(path):
@@ -401,6 +403,7 @@ def _plan_segment_cached(cache: PlannerCache, start_xy, goal_xy,
         if _polyline_ok(dt, poly, clearance_req_px):
             return poly
         # clearance too small → try offsets around goal
+
     for dx, dy in [(0, -offset_px), (offset_px, 0), (0, offset_px), (-offset_px, 0)]:
         nx, ny = gx + dx, gy + dy
         H, W = mask_dil.shape[:2]
@@ -553,9 +556,15 @@ class PIDController:
                 _dbg(f"NEW_PLAN(ESCAPE): len={len(path)}", self._tick)
             return True
 
-        # normal planning
+        # --- Outside inflated area: normal logic ---
         need_new = False
-        if self._seg_path is None or self._seg_goal != goal_tuple or self._escape_active:
+        # REPLAN if: no path, goal changed, ESCAPE turning off, OR we've consumed the polyline
+        if (self._seg_path is None or
+            self._seg_goal != goal_tuple or
+            self._escape_active or
+            (self._seg_path is not None and self._seg_index >= len(self._seg_path))):
+            if self._seg_path is not None and self._seg_index >= len(self._seg_path):
+                _dbg("END_OF_POLYLINE: consumed path but goal not reached — replanning.", self._tick)
             if self._escape_active:
                 _dbg("ESCAPE_DONE: outside inflated region — switching to normal planning.", self._tick)
             self._escape_active = False
@@ -625,25 +634,41 @@ class PIDController:
                 if stop_event and stop_event.is_set(): break
                 continue
 
+            # Guard: if seg_path somehow empty, force a replan next tick
+            if not self._seg_path:
+                self._seg_path = None
+                self._seg_index = 0
+                continue
+
             cur_wp = self._seg_path[min(self._seg_index, len(self._seg_path)-1)]
             tx, ty = float(cur_wp[0]), float(cur_wp[1])
 
             # advance
             dist_to_wp = math.hypot(tx - x, ty - y)
             if dist_to_wp < self.dist_tolerance:
-                self._seg_index += 1
+                # increment but clamp to avoid runaway index
+                self._seg_index = min(self._seg_index + 1, len(self._seg_path))
                 _dbg(f"ADVANCE: waypoint {self._seg_index}/{len(self._seg_path)}", self._tick)
+
                 if self._escape_active and self._seg_index >= len(self._seg_path):
                     self._escape_active = False
                     self._escape_line_mask = None
                     _dbg("ESCAPE_DONE: back to normal planning.", self._tick)
+
                 if self._seg_index >= len(self._seg_path):
+                    # reached end of polyline: check goal proximity
                     if math.hypot(goal_x - x, goal_y - y) < self.final_distance_tol:
                         self.iface.write_command(self.speed_neutral, self.speed_neutral)
                         self._pause_at_checkpoint(delay_ms / 1000.0, stop_event=stop_event)
                         idx += 1
                         self._seg_path = None; self._seg_index = 0; self._seg_goal = None
                         self.integral_ang = 0.0; self.prev_ang_err = 0.0
+                        continue
+                    else:
+                        # last WP reached but goal still far (likely blocked) → replan
+                        _dbg("LAST_WP_BUT_GOAL_FAR: invalidating path to trigger replan.", self._tick)
+                        self._seg_path = None
+                        self._seg_index = 0
                         continue
                 continue
 
