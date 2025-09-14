@@ -1,4 +1,5 @@
 import cv2
+import hashlib
 import numpy as np
 from PIL import Image
 import math
@@ -42,28 +43,74 @@ def display_frame(frame, target_w, target_h):
 # ---------------------------
 # Drawing helpers (pose)
 # ---------------------------
-def draw_robot_pose(frame, x, y, theta, corners=None, 
-                    box_color=(255, 0, 0), box_thickness=2,
-                    center_color=(0, 255, 0), center_radius=4,
-                    line_color=(0, 0, 255), line_thickness=2, line_len=20):
+def draw_robot_pose(frame, x=None, y=None, theta=None, corners=None, 
+                    box_color=(0, 0, 255), box_thickness=2,
+                    center_color=(0, 0, 255), center_radius=4,
+                    line_color=(0, 0, 255), line_thickness=2, line_len=20,
+                    robot_pos_path=None, draw_ids=True, font_scale=0.5, font_thickness=1):
     """
-    Draws:
-    - A polygon from 4 ArUco corners (if provided)
-    - A center circle at (x, y)
-    - A line indicating orientation from (x, y) in direction `theta` (radians)
+    Modes:
+      1) Single pose: if robot_pos_path is None, draws one robot using (x,y,theta[,corners]).
+      2) Multi-robot: if robot_pos_path is provided, reads lines in 'id,x,y,theta' format and draws all.
+
+    All robots are drawn in the same red color (BGR = (0,0,255)).
     """
     frame_copy = frame.copy()
-    if corners is not None:
-        pts = np.array(corners, dtype=np.int32).reshape((-1, 1, 2))
-        cv2.polylines(frame_copy, [pts], isClosed=True, color=box_color, thickness=box_thickness)
 
-    # Center
-    cv2.circle(frame_copy, (int(x), int(y)), center_radius, center_color, -1)
+    # --- Single-pose mode (original behavior) ---
+    if robot_pos_path is None:
+        if corners is not None:
+            pts = np.array(corners, dtype=np.int32).reshape((-1, 1, 2))
+            cv2.polylines(frame_copy, [pts], isClosed=True, color=box_color, thickness=box_thickness)
 
-    # Heading line
-    x2 = int(x + line_len * math.cos(theta))
-    y2 = int(y + line_len * math.sin(theta))
-    cv2.line(frame_copy, (int(x), int(y)), (x2, y2), line_color, line_thickness)
+        if x is not None and y is not None:
+            cv2.circle(frame_copy, (int(x), int(y)), center_radius, center_color, -1)
+
+        if x is not None and y is not None and theta is not None:
+            x2 = int(x + line_len * math.cos(theta))
+            y2 = int(y + line_len * math.sin(theta))
+            cv2.line(frame_copy, (int(x), int(y)), (x2, y2), line_color, line_thickness)
+
+        return frame_copy
+
+    # --- Multi-robot mode (draw from file) ---
+    try:
+        with open(robot_pos_path, "r") as f:
+            lines = f.readlines()
+    except Exception:
+        return frame_copy
+
+    for ln in lines:
+        ln = ln.strip()
+        if not ln or ln.startswith("#"):
+            continue
+        parts = [p for p in ln.replace(" ", ",").split(",") if p != ""]
+        if len(parts) < 4:
+            continue
+        try:
+            mid   = int(float(parts[0]))
+            xi    = float(parts[1])
+            yi    = float(parts[2])
+            thetai= float(parts[3])
+        except ValueError:
+            continue
+
+        # All same red color
+        bgr = (0, 0, 255)
+
+        # Center
+        cv2.circle(frame_copy, (int(xi), int(yi)), center_radius, bgr, -1)
+
+        # Heading line
+        x2 = int(xi + line_len * math.cos(thetai))
+        y2 = int(yi + line_len * math.sin(thetai))
+        cv2.line(frame_copy, (int(xi), int(yi)), (x2, y2), bgr, line_thickness)
+
+        # Optional label
+        if draw_ids:
+            label = f"ID:{mid}"
+            cv2.putText(frame_copy, label, (int(xi) + 6, int(yi) - 6),
+                        cv2.FONT_HERSHEY_SIMPLEX, font_scale, bgr, font_thickness, lineType=cv2.LINE_AA)
 
     return frame_copy
 

@@ -11,7 +11,7 @@ from port_utils import refresh_serial_ports
 from thread_utils import run_in_thread, disable_button, enable_button, callibrate_task, run_task, toggle_execute
 from ui_utils import overlay_obstacles, draw_path_on_frame
 from arena_utils import refresh_cameras, launch_grid_popup, load_arena_settings, open_all_cameras
-from arena_stitching import find_robot_in_arena
+from arena_stitching import find_robots_in_arena
 from detection import detect_realtime_obstacles
 
 class DashboardApp(ctk.CTk):
@@ -154,7 +154,7 @@ class DashboardApp(ctk.CTk):
                 print(f"Cannot open camera {cap}")
                 return self.after(16, self.on_update_video)
 
-        stitched, processed_frames, pose = find_robot_in_arena(aruco_id, self.arena_settings, self.caps, save_path="Data/robot_pos.txt")
+        stitched, processed_frames, __ = find_robots_in_arena(self.arena_settings, self.caps, save_path="Data/robot_pos.txt")
         self.current_frame = stitched
         self.current_list_of_frames = processed_frames
         detect_realtime_obstacles(frame_bgr=stitched,
@@ -162,12 +162,14 @@ class DashboardApp(ctk.CTk):
                                   ref_path="Data/frame_img.png",
                                   robot_path="Data/robot_pos.txt",
                                   robot_padding=10)
-        if pose:
-            final_x, final_y, final_theta = pose
-            # d_frame = draw_robot_pose(stitched, final_x, final_y, final_theta)
-            d_frame = draw_robot_pose_with_sprite(frame=stitched, x=final_x, y=final_y, theta=final_theta, sprite="Data/robot_sprite.png", sprite_scale=0.3)
-        else:
-            d_frame = stitched
+        # if pose:
+        #     final_x, final_y, final_theta = pose
+        #     # d_frame = draw_robot_pose(stitched, final_x, final_y, final_theta)
+        #     d_frame = draw_robot_pose_with_sprite(frame=stitched, x=final_x, y=final_y, theta=final_theta, sprite="Data/robot_sprite.png", sprite_scale=0.3)
+        # else:
+            # d_frame = stitched
+        
+        d_frame = draw_robot_pose(stitched, robot_pos_path="Data/robot_pos.txt")
 
         overlay = overlay_obstacles(frame=d_frame, obstacles_path="Data/obstacles.txt")
         draw_frame = draw_path_on_frame(overlay, path_file="Targets/path.txt")

@@ -23,9 +23,23 @@ def trace_targets(
 
     arena = [tuple(map(int, row)) for row in data['arena_corners']]
     obs   = [{"bbox": tuple(map(int, row))} for row in data['obstacles']]
-    sx, sy, _ = data['robot_pos']
-    if start is None:
-        start = (int(sx), int(sy))
+
+    robots = data['robot_pos']   # shape (N,4): [id,x,y,theta]
+    if robots is not None and robots.shape[0] > 0:
+        # if no robot_id provided, default to first
+        if robot_id is None:
+            rid, rx, ry, _ = robots[0]
+            robot_id = int(rid)
+        else:
+            # get selected robot pos
+            match = robots[np.where(robots[:,0].astype(int) == int(robot_id))]
+            if match.shape[0] == 0:
+                raise RuntimeError(f"Robot id {robot_id} not found in robot_pos.txt")
+            rx, ry = match[0][1], match[0][2]
+
+        # set start if not manually provided
+        if start is None:
+            start = (int(rx), int(ry))
 
     # 2) load the image
     frame_path = os.path.join(data_folder, "frame_img.png")

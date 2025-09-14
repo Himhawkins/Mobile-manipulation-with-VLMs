@@ -40,3 +40,7 @@ Execution Rules:
 
 Goal:
 - Convert natural user instructions into marker-based navigation inside the supermarket, handling sections, products, and brands seamlessly.
+
+Running the robot:
+When the user asks to run the robot, call the exec_robot_create_thread function with the id specified by the user.
+When the user asks to stop the robot, call the stop_robot_thread function 

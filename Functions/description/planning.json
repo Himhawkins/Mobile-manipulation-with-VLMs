@@ -1,13 +1,13 @@
 [
   {
     "name": "trace_targets",
-    "description": "Traces A* paths between a list of target coordinates, avoiding obstacles and saving all reachable points to a file and a visualization image. At each checkpoint (the final point of each segment to a target), an optional delay (in milliseconds) can be written as a third CSV column for that point.\n\nOutput: Saves the improved path points to a text file (x,y or x,y,delay_ms at checkpoints) and renders a visual path overlay image with arena, obstacles, and path segments.\n\nExample Usage: `trace_targets([(50,50), (150,150)], 'Targets/improved.txt', start=(10,10), data_folder='Data', spacing=5, delay=1500, out_path='Data/trace_overlay.png')` returns: Confirmation message indicating path generation success and saved file location.",
+    "description": "Plans minimal waypoints to each target using A* with obstacle inflation and an offset fallback, then saves/updates a SIMPLE JSON file that only contains the robot id and its path. The saved JSON has the shape:\n{\n  \"robots\": [\n    {\n      \"id\": 782,\n      \"path\": [[sx, sy, 0], [x1, y1, d1], [x2, y2, d2], ...]\n    }\n  ]\n}\n- The first triple in `path` is always the robot start with delay=0.\n- If an entry for `id` already exists, it is replaced; otherwise it is appended.\n\nReturns:\n- \"Robot not found.\" if `robot_id` is provided but not present in Data/robot_pos.txt.\n- \"Path generation successful.\" after saving the JSON.\n\nExample Usage: `trace_targets(input_target_list=[[50,50],[150,150]], output_json_path='Data/paths.json', robot_id=782, spacing=50, delay=1000, offset=120)`",
     "parameters": {
       "type": "OBJECT",
       "properties": {
         "input_target_list": {
           "type": "ARRAY",
-          "description": "Required. A list of (x,y) target coordinates. Provide as a list of lists or tuples, e.g., [[50, 50], [150, 150]].",
+          "description": "Required. List of (x,y) target coordinates. Provide as a list of lists or tuples, e.g., [[50, 50], [150, 150]].",
           "items": {
             "type": "ARRAY",
             "items": {
@@ -15,36 +15,45 @@
             }
           }
         },
-        "output_target_path": {
+        "output_json_path": {
           "type": "STRING",
-          "description": "Path to write the concatenated reachable points to a plain-text CSV file."
+          "description": "Path to save the SIMPLE JSON (only id and path). Default: 'Data/paths.json'."
         },
         "start": {
           "type": "ARRAY",
-          "description": "Optional start position (x, y). If not provided, the robot's current position from the data folder will be used.",
+          "description": "Optional start position (x, y). If not provided, uses the pose of `robot_id` from Data/robot_pos.txt, or the first robot if `robot_id` is omitted.",
           "items": {
             "type": "INTEGER"
           }
         },
         "data_folder": {
           "type": "STRING",
-          "description": "Folder containing arena data, obstacle files, and the camera frame image. Defaults to 'Data'."
+          "description": "Folder containing arena data, obstacles, robot poses, and the frame image. Default: 'Data'."
         },
         "spacing": {
           "type": "INTEGER",
-          "description": "Optional dilation spacing (in pixels) around obstacles to ensure safe A* navigation. Default 50."
+          "description": "Dilation spacing (pixels) around obstacles for planning safety. Default: 50."
         },
         "delay": {
           "type": "INTEGER",
-          "description": "Optional delay (in milliseconds) to apply at EACH checkpoint. You may also pass an array of integers (one per target) if your caller supports non-scalar types; e.g., [1000, 0, 2000]. When provided, the delay is written only on the last point of each segment."
+          "description": "Delay in milliseconds applied to EACH accepted target point. You may also pass an array of integers (one per target) if supported by your caller."
         },
-        "out_path": {
-          "type": "STRING",
-          "description": "Path to save the output visualization PNG showing arena, obstacles, and traced paths."
+        "offset": {
+          "type": "INTEGER",
+          "description": "Offset distance (pixels) to try around a blocked target (N/E/S/W). Default: 100."
+        },
+        "robot_id": {
+          "type": "INTEGER",
+          "description": "Required. Robot ID to read from Data/robot_pos.txt (multi-robot file with rows: id,x,y,theta)."
+        },
+        "verbose": {
+          "type": "BOOLEAN",
+          "description": "Set true to print debug logs during planning. Default: false."
         }
       },
       "required": [
-        "input_target_list"
+        "input_target_list",
+        "robot_id"
       ]
     }
   }

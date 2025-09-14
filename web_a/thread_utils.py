@@ -5,7 +5,7 @@ from ui_utils import CTkMessageBox, get_app_settings
 from detection import detect_arena, detect_and_get_bbox, detect_obstacles, save_img_to_path
 from Functions.Library.Agent.gemini import call_gemini_agent
 from controller import exec_bot_with_thread
-from motion import move_robot_with_thread
+from motion import move_robot
 
 def set_preview_text(text_box, text: str):
     text_box.configure(state="normal")
@@ -109,7 +109,7 @@ def toggle_execute(app, serial_var, execute_btn,
 
         # 2) Move robot thread
         app.move_thread = threading.Thread(
-            target=move_robot_with_thread,
+            target=move_robot,
             kwargs={
                 'serial_port': port,
                 'baud_rate': baud_rate,

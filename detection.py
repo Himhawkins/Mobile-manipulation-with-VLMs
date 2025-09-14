@@ -321,6 +321,35 @@ def update_reference_image(frame_bgr: np.ndarray, ref_path: str = "Data/frame_im
     os.makedirs(os.path.dirname(ref_path), exist_ok=True)
     cv2.imwrite(ref_path, frame_bgr)
 
+def _read_robot_positions(robot_path: str):
+    """
+    Parse robot_pos.txt with one robot per line:
+        id,x,y,theta
+    Returns a list of dicts: [{"id": int, "x": float, "y": float, "theta": float}, ...]
+    Tolerates spaces instead of commas; ignores blank/comment lines.
+    """
+    robots = []
+    try:
+        with open(robot_path, "r") as f:
+            for raw in f:
+                line = raw.strip()
+                if not line or line.startswith("#"):
+                    continue
+                parts = [p for p in line.replace(" ", ",").split(",") if p != ""]
+                if len(parts) < 4:
+                    continue
+                try:
+                    rid = int(float(parts[0]))   # tolerate "7.0"
+                    x   = float(parts[1])
+                    y   = float(parts[2])
+                    th  = float(parts[3])
+                except ValueError:
+                    continue
+                robots.append({"id": rid, "x": x, "y": y, "theta": th})
+    except FileNotFoundError:
+        pass
+    return robots
+
 def detect_realtime_obstacles(frame_bgr: np.ndarray,
                               save_path: str = "Data/realtime_obstacles.txt",
                               ref_path: str = "Data/frame_img.png",
@@ -328,13 +357,13 @@ def detect_realtime_obstacles(frame_bgr: np.ndarray,
                               robot_padding: int = 0):
     """
     Compare current frame against reference image on disk and save obstacles.
-    Skips any obstacle whose bbox contains the current robot (x,y).
+    Skips any obstacle whose bbox contains ANY robot (x,y) loaded from robot_pos.txt.
 
     Args:
         frame_bgr: BGR frame from OpenCV.
         save_path: where to write TL,TR,BR,BL per line.
         ref_path:  background/reference image path.
-        robot_path: file containing 'x,y,theta'.
+        robot_path: file containing multiple lines of 'id,x,y,theta'.
         robot_padding: optional pixels to expand the bbox by before testing
                        containment (helps avoid excluding near-robot blobs).
 
@@ -363,33 +392,38 @@ def detect_realtime_obstacles(frame_bgr: np.ndarray,
     mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, k, iterations=1)
     mask = cv2.dilate(mask, k, iterations=1)
 
-    # read robot position (optional)
-    robot_xy = _read_robot_xy(robot_path)
+    # read ALL robot positions
+    robots = _read_robot_positions(robot_path)  # list[{"id","x","y","theta"}]
 
-    def _contains_robot(x, y, w, h):
-        if robot_xy is None:
+    def _bbox_contains_any_robot(x, y, w, h):
+        if not robots:
             return False
-        rx, ry = robot_xy
-        # Optionally shrink bbox by robot_padding to avoid over-filtering
         x0 = x - robot_padding
         y0 = y - robot_padding
         x1 = x + w + robot_padding
         y1 = y + h + robot_padding
-        return (x0 <= rx <= x1) and (y0 <= ry <= y1)
+        for r in robots:
+            rx, ry = r["x"], r["y"]
+            if x0 <= rx <= x1 and y0 <= ry <= y1:
+                return True
+        return False
 
     # contours
     contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
     kept_boxes = []
-    os.makedirs(os.path.dirname(save_path), exist_ok=True)
+    dirn = os.path.dirname(save_path)
+    if dirn:
+        os.makedirs(dirn, exist_ok=True)
+
     with open(save_path, "w") as f:
         for c in contours:
             if cv2.contourArea(c) < MIN_AREA_BG:
                 continue
             x, y, w, h = cv2.boundingRect(c)
 
-            # Skip boxes that contain the robot position
-            if _contains_robot(x, y, w, h):
+            # Skip boxes that contain ANY robot position
+            if _bbox_contains_any_robot(x, y, w, h):
                 continue
 
             kept_boxes.append((x, y, w, h))

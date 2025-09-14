@@ -4,6 +4,14 @@
         "name": "detect_objects"
     },
     {
+        "library": "controller",
+        "name": "exec_robot_create_thread"
+    },
+    {
+        "library": "controller",
+        "name": "stop_robot_thread"
+    },
+    {
         "library": "planning",
         "name": "trace_targets"
     }

@@ -19,14 +19,16 @@ def read_data(data_folder="Data"):
       - command:       empty float array (0,)
       - error:         empty float array (0,)
       - obstacles:     empty array of shape (0, 4, 2), dtype=int
-      - robot_pos:     np.array([0.0, 0.0, 0.0]) if file is empty
+      - robot_pos:     float array of shape (N, 4): [id, x, y, theta].
+                       If file is empty => shape (0, 4).
 
     Files and expected formats:
       - arena_corners.txt: one "x,y" per line (4 lines typical)
       - command.txt:       one line of CSV floats
       - error.txt:         one line of CSV floats (may have trailing commas)
       - obstacles.txt:     one obstacle per line as "(x1,y1),(x2,y2),(x3,y3),(x4,y4)"
-      - robot_pos.txt:     one line: "x,y,theta"
+      - robot_pos.txt:     multi-line, each: "id,x,y,theta"
+                           (backward-tolerant: "x,y,theta" -> id assumed 0)
     """
     # Ensure folder exists
     os.makedirs(data_folder, exist_ok=True)
@@ -40,7 +42,7 @@ def read_data(data_folder="Data"):
 
     # Create files if missing (empty)
     for p in [arena_corners_file, command_file, error_file, obstacles_file, robot_pos_file]:
-        _ensure_path(p)
+        _ensure_path(p)  # assumes your existing helper
 
     data = {}
 
@@ -79,8 +81,7 @@ def read_data(data_folder="Data"):
             parts = s.split(",")
             # Expect 8 integers for 4 corners
             if len(parts) != 8:
-                # Skip malformed lines rather than crashing
-                continue
+                continue  # Skip malformed lines
             try:
                 nums = list(map(int, parts))
             except ValueError:
@@ -92,17 +93,41 @@ def read_data(data_folder="Data"):
         else:
             data['obstacles'] = np.zeros((0, 4, 2), dtype=int)
 
-        # --- Read Robot Position ---
+        # --- Read Robot Positions (multi-robot) ---
+        robots = []
         with open(robot_pos_file, 'r') as f:
-            line = f.readline().strip()
-        if line:
-            try:
-                data['robot_pos'] = np.array(list(map(float, line.split(','))), dtype=float)
-            except ValueError:
-                # Malformed; fall back to default
-                data['robot_pos'] = np.array([0.0, 0.0, 0.0], dtype=float)
+            for raw in f:
+                ln = raw.strip()
+                if not ln or ln.startswith("#"):
+                    continue
+                # Normalize separators (allow spaces)
+                parts = [p for p in ln.replace(" ", ",").split(",") if p != ""]
+                # Accept either 4 fields (id,x,y,theta) or 3 fields (x,y,theta -> id=0)
+                if len(parts) == 4:
+                    try:
+                        rid   = int(float(parts[0]))  # tolerate "7.0"
+                        x     = float(parts[1])
+                        y     = float(parts[2])
+                        theta = float(parts[3])
+                        robots.append([rid, x, y, theta])
+                    except ValueError:
+                        continue
+                elif len(parts) == 3:
+                    # Backward compatibility
+                    try:
+                        x     = float(parts[0])
+                        y     = float(parts[1])
+                        theta = float(parts[2])
+                        robots.append([0, x, y, theta])  # id=0
+                    except ValueError:
+                        continue
+                else:
+                    continue
+
+        if robots:
+            data['robot_pos'] = np.array(robots, dtype=float)  # shape (N,4): [id,x,y,theta]
         else:
-            data['robot_pos'] = np.array([0.0, 0.0, 0.0], dtype=float)
+            data['robot_pos'] = np.zeros((0, 4), dtype=float)
 
     except Exception as e:
         print(f"Error while reading data files: {e}")

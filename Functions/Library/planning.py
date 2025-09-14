@@ -1,97 +1,176 @@
 #!/usr/bin/env python3
+
 import os
-import math
+import json
+
 import cv2
 import numpy as np
-import matplotlib.pyplot as plt
-from matplotlib.patches import Polygon, Rectangle
 
 from astar import PathPlanner
 from Functions.Library.Agent.load_data import read_data
 
-def find_path_with_offset(planner, current_pos, target_pos, offset):
+
+def _inflate_mask(mask: np.ndarray, spacing: int) -> np.ndarray:
+    """Inflate mask by `spacing` pixels (ellipse)."""
+    k = 2 * int(spacing) + 1
+    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (k, k))
+    return cv2.dilate(mask, kernel)
+
+
+def _try_plan(planner: PathPlanner, start_xy, goal_xy, simplify_dist=10) -> bool:
+    """Return True if a path exists from start_xy to goal_xy."""
+    path = planner.find_obstacle_aware_path(start_xy, goal_xy, simplify_dist)
+    return bool(path)
+
+
+def _choose_reachable_point(planner: PathPlanner, current_xy, target_xy, offset_px: int, log) -> tuple | None:
     """
-    Checks for a valid path to points offset from the target in four cardinal directions.
+    Choose either:
+      - target_xy (if directly reachable), or
+      - one of four offset positions at distance=offset_px (N,E,S,W) that is reachable.
+    Returns the chosen (x, y) or None if none are reachable.
     """
-    tx, ty = target_pos
-    
-    # Define the four points to check: North, East, South, West
-    offset_points = [
-        (tx, ty - offset),  # Top
-        (tx + offset, ty),  # Right
-        (tx, ty + offset),  # Bottom
-        (tx - offset, ty)   # Left
+    log(f"  Trying direct plan: {current_xy} -> {target_xy}")
+    if _try_plan(planner, current_xy, target_xy):
+        log("    ✔ Direct path OK")
+        return target_xy
+
+    tx, ty = target_xy
+    candidates = [
+        (tx, ty - offset_px),  # North
+        (tx + offset_px, ty),  # East
+        (tx, ty + offset_px),  # South
+        (tx - offset_px, ty),  # West
     ]
 
-    # Try to find a path to any of the offset points
-    for point in offset_points:
-        path = planner.find_obstacle_aware_path(current_pos, point, 10)
-        if path:
-            # If a path is found, return it and the successful point
-            return path, point
-    
-    # If no path was found after checking all four points
-    return None, None
+    for p in candidates:
+        log(f"    Trying offset {p}")
+        if _try_plan(planner, current_xy, p):
+            log(f"    ✔ Using offset {p}")
+            return p
 
-def _densify_segment(p0, p1, step_px=10):
-    """
-    Return a list of points from p0 to p1 spaced ~step_px apart (inclusive of p1).
-    p0, p1 are (x, y). Coordinates are rounded to ints.
-    """
-    x0, y0 = p0
-    x1, y1 = p1
-    dx, dy = (x1 - x0), (y1 - y0)
-    dist = math.hypot(dx, dy)
-    if dist <= 1e-6:
-        return [p0]  # same point
+    log("    ✖ No reachable offset")
+    return None
 
-    n_steps = max(1, int(dist // step_px))  # number of intervals
-    pts = []
-    for k in range(n_steps):
-        t = k / n_steps
-        x = int(round(x0 + t * dx))
-        y = int(round(y0 + t * dy))
-        pts.append((x, y))
-    pts.append((int(round(x1)), int(round(y1))))  # ensure endpoint included
-    return pts
+
+def _load_paths_json(path: str) -> dict:
+    """Load JSON structure { 'robots': [ {id, path}, ... ] } or return empty."""
+    if not os.path.exists(path):
+        return {"robots": []}
+    try:
+        with open(path, "r") as f:
+            data = json.load(f)
+            if isinstance(data, dict) and "robots" in data and isinstance(data["robots"], list):
+                return data
+    except Exception:
+        pass
+    return {"robots": []}
+
+
+def _save_paths_json(path: str, data: dict) -> None:
+    os.makedirs(os.path.dirname(path), exist_ok=True
+    )
+    with open(path, "w") as f:
+        json.dump(data, f, indent=2)
+
+
+def _upsert_robot_path(json_path: str, robot_id: int, path_points: list[list[int]]):
+    """
+    Upsert robot path into JSON (SIMPLE form):
+    {
+      "id": <int>,
+      "path": [[x, y, delay], ...]  # includes start as the first triple [sx, sy, 0]
+    }
+    - If the robot id exists, replace its entry.
+    - Else, append new entry.
+    """
+    data = _load_paths_json(json_path)
+    robots = data.get("robots", [])
+
+    new_entry = {
+        "id": int(robot_id),
+        "path": path_points,
+    }
+
+    replaced = False
+    for i, entry in enumerate(robots):
+        if int(entry.get("id", -1)) == int(robot_id):
+            robots[i] = new_entry
+            replaced = True
+            break
+    if not replaced:
+        robots.append(new_entry)
+
+    data["robots"] = robots
+    _save_paths_json(json_path, data)
+
 
 def trace_targets(
     input_target_list,
-    output_target_path="Targets/path.txt",
+    output_json_path="Data/paths.json",
     start=None,
     data_folder="Data",
     spacing=50,
     delay=0,
-    out_path="Data/trace_overlay.png",
     offset=100,
-    linear_step=10,      # <-- NEW: step size (px) for straight-line densification
+    robot_id=None,
+    verbose=False,
 ):
+    """
+    Build a minimal list of points:
+      path = [[sx, sy, 0], [x1, y1, d1], [x2, y2, d2], ...]
+    where each subsequent point is either the target itself (if reachable) or a
+    reachable offset (N/E/S/W by `offset` px). Persist to SIMPLE JSON.
+
+    Returns:
+    - "Robot not found."
+    - "Path generation successful."
+    """
+    log = print if verbose else (lambda *_: None)
+
+    # --- Load data ---
     data = read_data(data_folder)
     if data is None:
         raise RuntimeError(f"Could not read data from '{data_folder}'")
 
-    arena = [tuple(map(int, row)) for row in data['arena_corners']]
-    polygon_obs = [ [tuple(map(int, pt)) for pt in poly] for poly in data['obstacles']]
-    sx, sy, _ = data['robot_pos']
-    if start is None:
-        start = (int(sx), int(sy))
+    arena = [tuple(map(int, row)) for row in data.get("arena_corners", [])]
+    polygon_obs = [[tuple(map(int, pt)) for pt in poly] for poly in data.get("obstacles", [])]
+    robots_arr = data.get("robot_pos", None)
 
+    # --- Resolve robot start pose ---
+    if robots_arr is not None and len(robots_arr) > 0:
+        if robot_id is None:
+            rid, rx, ry, _ = robots_arr[0]
+            robot_id = int(rid)
+            log(f"[info] robot_id not provided; defaulting to first robot id={robot_id}")
+        else:
+            matches = robots_arr[np.where(robots_arr[:, 0].astype(int) == int(robot_id))]
+            if matches.shape[0] == 0:
+                return "Robot not found."
+            rx, ry = matches[0][1], matches[0][2]
+
+        if start is None:
+            start = (int(rx), int(ry))
+    else:
+        # No robots in data at all
+        if robot_id is not None:
+            return "Robot not found."
+        if start is None:
+            raise RuntimeError("No robot poses available and no explicit start provided.")
+
+    # --- Prepare planner ---
     frame_path = os.path.join(data_folder, "frame_img.png")
     frame = cv2.imread(frame_path)
     if frame is None:
         raise FileNotFoundError(f"Could not load image at '{frame_path}'")
-    h, w = frame.shape[:2]
+    H, W = frame.shape[:2]
 
-    obs = [{"corners": poly} for poly in polygon_obs]
-    planner = PathPlanner(obs, (h, w), arena)
+    obstacles = [{"corners": poly} for poly in polygon_obs]
+    planner = PathPlanner(obstacles, (H, W), arena_corners=arena)
+    planner.mask = _inflate_mask(planner.mask, int(spacing))
 
-    # grow obstacles by 'spacing' to create a safety margin
-    k = 2 * int(spacing) + 1
-    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (k, k))
-    planner.mask = cv2.dilate(planner.mask, kernel)
-
-    targets = [(int(x), int(y)) for x,y in input_target_list]
-
+    # --- Normalize inputs ---
+    targets = [(int(x), int(y)) for x, y in input_target_list]
     if isinstance(delay, (int, float)):
         delays = [int(delay)] * len(targets)
     else:
@@ -99,82 +178,40 @@ def trace_targets(
         if len(delays) != len(targets):
             raise ValueError("Length of 'delay' must match number of targets")
 
-    paths = []
-    successful_delays = []
-    current = start
+    # --- Build minimal path list: START + chosen (with offsets) ---
+    current = (int(start[0]), int(start[1]))
+    json_path_points: list[list[int]] = [[current[0], current[1], 0]]  # include start first
+    log(f"[trace] start={current} spacing={spacing}px offset={offset}px")
 
-    for i, tgt in enumerate(targets):
-        path = planner.find_obstacle_aware_path(current, tgt, 10)
-        final_tgt = tgt
-
-        if not path:
-            print(f"Segment {i+1}: {current} → {tgt} is UNREACHABLE.")
-            print(f" -> Target may be blocked. Trying {offset}px offset points...")
-            path, final_tgt = find_path_with_offset(planner, current, tgt, offset)
-
-        if path:
-            # === NEW: if the path is just a straight segment [start, end],
-            # resample it into intermediate points every ~linear_step pixels.
-            if len(path) == 2:
-                p0, p1 = path[0], path[1]
-                path = _densify_segment(p0, p1, step_px=linear_step)
-
-            print(f"Segment {i+1}: {current} → {final_tgt} [{len(path)} steps]")
-            paths.append(path)
-            successful_delays.append(delays[i])
-            current = final_tgt
+    for i, (tgt, d) in enumerate(zip(targets, delays)):
+        log(f"[target {i+1}] desired={tgt}")
+        chosen = _choose_reachable_point(planner, current, tgt, int(offset), log)
+        if chosen is not None:
+            cx, cy = int(chosen[0]), int(chosen[1])
+            json_path_points.append([cx, cy, int(d)])
+            current = (cx, cy)
+            log(f"  -> appended: {[cx, cy, int(d)]}")
         else:
-            print(f" -> SKIPPING target {tgt} as no path could be generated.")
+            log(f"  -> skipping unreachable target {tgt}")
 
-    # ---------- Plotting (unchanged) ----------
-    img_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-    fig, ax = plt.subplots(figsize=(10, 8))
-    ax.imshow(img_rgb)
-    ax.axis("off")
-    ax.add_patch(Polygon(arena, closed=True, fill=False, edgecolor='yellow', linewidth=2))
+    # --- Save/replace in SIMPLE JSON by id ---
+    robot_id_to_save = 0 if robot_id is None else int(robot_id)
+    _upsert_robot_path(output_json_path, robot_id_to_save, json_path_points)
+    log(f"[write] paths.json (id={robot_id_to_save}) -> {output_json_path}")
 
-    for poly in polygon_obs:
-        ax.add_patch(Polygon(poly, closed=True, facecolor='red', alpha=0.3, edgecolor='white'))
-
-    ax.plot(start[0], start[1], 'o', color='cyan', markersize=10, label='robot')
-
-    if targets:
-        txs, tys = zip(*targets)
-        ax.scatter(txs, tys, s=80, facecolors='none', edgecolors='white', label='targets')
-
-    for path in paths:
-        xs, ys = zip(*path)
-        ax.plot(xs, ys, '-', linewidth=2, color='lime')
-
-    ax.legend(loc='upper right')
-    plt.tight_layout()
-    fig.savefig(out_path, bbox_inches='tight')
-    plt.close(fig)
-
-    # ---------- Save to file (unchanged logic; now writes densified points) ----------
-    with open(output_target_path, "w") as f:
-        f.write(f"{int(sx)},{int(sy)},{0}\n")
-        for i, path in enumerate(paths):
-            for j, (x, y) in enumerate(path):
-                if j == len(path) - 1:
-                    f.write(f"{x},{y},{successful_delays[i]}\n")
-                else:
-                    # f.write(f"{x},{y},{0}\n")
-                    pass
-
-    return f"Path Planned! and saved to {output_target_path}"
+    return "Path generation successful."
 
 
+# ---- Quick local test ----
 if __name__ == "__main__":
-    DATA_FOLDER  = "Data"
-    SPACING      = 20
-    input_list = [[705.0, 228.0], [1163.0, 231.0]]
-
-    trace_targets(
-        input_target_list=input_list,
-        output_target_path="Targets/path.txt",
-        data_folder=DATA_FOLDER,
-        spacing=SPACING,
+    msg = trace_targets(
+        input_target_list=[(1331, 479), (48, 265)],
+        output_json_path="Targets/paths.json",
+        data_folder="Data",
+        spacing=20,
         delay=5000,
-        out_path="Data/trace_overlay.png"
+        offset=100,
+        robot_id=782,   # or set a valid id
+        verbose=False
     )
+    print(msg)

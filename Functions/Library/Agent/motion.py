@@ -51,7 +51,7 @@ def move_robot(
             pass
         ser.close()
 
-def move_robot_with_thread(
+def move_robot(
     serial_port: str,
     baud_rate: int,
     command_file: str,
