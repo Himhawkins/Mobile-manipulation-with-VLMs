@@ -7,12 +7,12 @@ import json
 import datetime
 from pathlib import Path
 import threading
-
+import queue  # NEW
 import cv2
 import numpy as np
 
 from astar import PathPlanner
-from motion import start_move_robot_thread
+from motion import start_move_robot_thread, send_gripper_once  # NEW
 
 
 # Global registry of running robot threads
@@ -20,6 +20,7 @@ _robot_threads = {}  # { robot_id: {
                      #     "ctrl_thread": Thread,
                      #     "serial_thread": Thread or None,
                      #     "stop_event": Event,
+                     #     "gripper_queue": Queue[str] or None,   # NEW
                      #     "started_at": float,
                      #     "ctrl_done": bool
                      # } }
@@ -76,8 +77,9 @@ def _load_paths_json(json_path: str) -> dict:
 
 def _get_robot_path_from_json(json_path: str, robot_id: int):
     """
-    Returns list of (x,y,delay) tuples for robot_id from json_path,
-    or None if not found or malformed.
+    Returns list of (x, y, action) for robot_id from json_path,
+    where action is int delay_ms OR str 'open'/'close'.
+    Returns None if not found or malformed.
     """
     data = _load_paths_json(json_path)
     for entry in data.get("robots", []):
@@ -88,9 +90,20 @@ def _get_robot_path_from_json(json_path: str, robot_id: int):
                 for t in triples:
                     if not isinstance(t, (list, tuple)) or len(t) < 2:
                         continue
-                    x = int(t[0]); y = int(t[1])
-                    delay = int(t[2]) if len(t) >= 3 else 0
-                    out.append((x, y, delay))
+                    x = int(t[0])
+                    y = int(t[1])
+                    action = 0
+                    if len(t) >= 3:
+                        raw = t[2]
+                        if isinstance(raw, str):
+                            s = raw.strip().lower()
+                            action = s if s in ("open", "close") else 0
+                        else:
+                            try:
+                                action = int(raw)
+                            except Exception:
+                                action = 0
+                    out.append((x, y, action))
                 return out if out else None
         except Exception:
             continue
@@ -105,8 +118,7 @@ class FileInterface:
     def __init__(self, target_file, pose_file, command_file, error_file, robot_id=None):
         """
         target_file can be a JSON path (e.g., 'Data/paths.json') or legacy TXT.
-        When JSON, it expects the simplified structure described above and will
-        select the entry by self.robot_id.
+        When JSON, it expects entries with [x, y, <delay|\"open\"|\"close\">] for the selected robot_id.
         """
         self.target_file = target_file
         self.pose_file = pose_file
@@ -133,29 +145,29 @@ class FileInterface:
 
     def read_targets(self):
         """
-        Returns list[(x,y,delay_ms)].
-        Supports:
-          - JSON path file (recommended)
-          - Legacy TXT: one 'x,y,delay' per line
+        Returns a list of (x, y, action) where action is:
+          - int delay_ms
+          - str 'open' / 'close'
+        Supports JSON (recommended) and legacy TXT (delay only).
         """
+        # JSON mode
         if str(self.target_file).lower().endswith(".json"):
             if self.robot_id is None:
                 print("[WARN] target_file is JSON but robot_id not provided; no targets.")
                 return []
             triples = _get_robot_path_from_json(self.target_file, self.robot_id)
-            if triples is None:
-                return []
-            return triples
+            return triples if triples is not None else []
 
-        # Legacy TXT
+        # Legacy TXT mode
         lines = self._load_lines(self.target_file)
         out = []
         for line in lines:
             try:
                 parts = [p.strip() for p in line.split(',') if p.strip() != ""]
-                if len(parts) < 2: continue
+                if len(parts) < 2:
+                    continue
                 x = float(parts[0]); y = float(parts[1])
-                delay_ms = float(parts[2]) if len(parts) >= 3 else 0.0
+                delay_ms = int(float(parts[2])) if len(parts) >= 3 else 0
                 out.append((x, y, delay_ms))
             except Exception as e:
                 print(f"[WARN] Skipping malformed target '{line}': {e}")
@@ -277,8 +289,9 @@ def _bresenham_blocked(mask, p0, p1):
 
 def _line_blocked_multi(masks, p0, p1):
     for m in masks:
-        if m is not None and _bresenham_blocked(m, p0, p1): return True
-        return False
+        if m is not None and _bresenham_blocked(m, p0, p1):
+            return True
+    return False  # <-- FIXED: return False after checking all masks
 
 def _min_clearance_along_line(dt, p0, p1, stride=3):
     if dt is None: return 0.0
@@ -592,6 +605,9 @@ class PIDController:
         nearest_free_radius=50, linecheck_margin_px=1,
         clearance_boost_px=0,
         robot_id=None, robot_padding=0,
+        gripper_queue=None,                 # NEW (for thread mode)
+        gripper_sender=None,                # NEW (for non-thread, one-shot)
+        gripper_action_pause_s=0.4,         # NEW optional pause after action
     ):
         self.iface = iface
         # PID
@@ -602,7 +618,7 @@ class PIDController:
         # Motion limits
         self.speed_min = int(speed_min); self.speed_max = int(speed_max)
         self.speed_neutral = int(speed_neutral); self.max_lin = float(max_lin)
-        # Planner cache (planning uses extra inflation)
+        # Planner cache
         self.cache = PlannerCache(
             data_folder, spacing_px=spacing_px,
             plan_spacing_boost_px=plan_spacing_boost_px,
@@ -630,9 +646,14 @@ class PIDController:
         self._escape_active = False
         self._escape_line_mask = None
 
-        # Direction classification thresholds (tune if needed)
+        # Direction classification thresholds
         self.dir_v_thresh = 1.0
         self.dir_ang_thresh = 1.0
+
+        # Gripper integration
+        self.gripper_queue = gripper_queue
+        self.gripper_sender = gripper_sender
+        self.gripper_action_pause_s = float(gripper_action_pause_s)
 
         self.cache.rebuild_if_needed()
 
@@ -666,6 +687,24 @@ class PIDController:
         while (time.time() - t0) < delay_s:
             if stop_event and stop_event.is_set(): break
             time.sleep(0.03)
+
+    def _do_gripper_action(self, action: str):
+        """Send 'open' or 'close' via queue (preferred) or one-shot sender."""
+        action = action.strip().lower()
+        if action not in ("open", "close"):
+            return
+        if self.gripper_queue is not None:
+            try:
+                self.gripper_queue.put_nowait(action)
+            except Exception as e:
+                print(f"[gripper] queue put failed: {e}")
+        elif self.gripper_sender is not None:
+            try:
+                self.gripper_sender(action)
+            except Exception as e:
+                print(f"[gripper] sender failed: {e}")
+        else:
+            print("[gripper] no queue/sender attached; skipping")
 
     # ---- ESCAPE plan ----
     def _try_escape_plan(self, start_xy):
@@ -797,7 +836,7 @@ class PIDController:
                 self._pose_still_cnt = 0
             self._last_pose = cur_pose
 
-            goal_x, goal_y, delay_ms = targets[idx]
+            goal_x, goal_y, action = targets[idx]  # action: int delay OR 'open'/'close'
 
             if not self._ensure_segment_path((x, y), (goal_x, goal_y)):
                 _dbg(f"NO_PLAN: waiting for feasible path to target {idx+1} ({goal_x:.1f},{goal_y:.1f})...", self._tick)
@@ -832,9 +871,26 @@ class PIDController:
                     _dbg("ESCAPE_DONE: back to normal planning.", self._tick)
 
                 if self._seg_index >= len(self._seg_path):
+                    # reached final segment point for this target
                     if math.hypot(goal_x - x, goal_y - y) < self.final_distance_tol:
+                        # stop briefly at the point
                         self.iface.write_command(self.speed_neutral, self.speed_neutral)
-                        self._pause_at_checkpoint(delay_ms / 1000.0, stop_event=stop_event)
+
+                        # Handle action: delay OR gripper
+                        if isinstance(action, str) and action in ("open", "close"):
+                            _dbg(f"GRIPPER: {action} at ({goal_x},{goal_y})", self._tick)
+                            self._do_gripper_action(action)
+                            if self.gripper_action_pause_s > 0:
+                                self._pause_at_checkpoint(self.gripper_action_pause_s, stop_event=stop_event)
+                        else:
+                            # treat as delay (ms)
+                            try:
+                                delay_s = float(action) / 1000.0
+                            except Exception:
+                                delay_s = 0.0
+                            self._pause_at_checkpoint(delay_s, stop_event=stop_event)
+
+                        # move to next target
                         idx += 1
                         self._seg_path = None; self._seg_index = 0; self._seg_goal = None
                         self.integral_ang = 0.0; self.prev_ang_err = 0.0
@@ -909,6 +965,7 @@ def run_controller(
     clearance_boost_px=0,
     stop_event=None,
     robot_id=None, robot_padding=0,
+    gripper_queue=None, gripper_sender=None, gripper_action_pause_s=0.4,  # NEW
 ):
     iface = FileInterface(target_file, pose_file, command_file, error_file, robot_id=robot_id)
     controller = PIDController(
@@ -921,13 +978,33 @@ def run_controller(
         speed_min=speed_min, speed_max=speed_max, speed_neutral=speed_neutral, max_lin=max_lin,
         nearest_free_radius=nearest_free_radius, linecheck_margin_px=linecheck_margin_px,
         clearance_boost_px=clearance_boost_px,
-        robot_id=robot_id, robot_padding=robot_padding
+        robot_id=robot_id, robot_padding=robot_padding,
+        gripper_queue=gripper_queue, gripper_sender=gripper_sender,
+        gripper_action_pause_s=gripper_action_pause_s,
     )
+
+    # --- NEW: pre-open gripper before motion starts ---
+    if gripper_queue is not None:
+        try:
+            gripper_queue.put_nowait("open")
+        except Exception as e:
+            print(f"[gripper] failed to enqueue pre-open: {e}")
+    elif gripper_sender is not None:
+        try:
+            gripper_sender("open")
+        except Exception as e:
+            print(f"[gripper] failed to send pre-open: {e}")
+            
     ret = controller.run(stop_event=stop_event)
     return ret
 
-def exec_bot(robot_id=782, robot_padding=30):
-    target_file  = str(Path("Targets") / "paths.json")     # JSON path by id
+def exec_bot(
+    robot_id=782, robot_padding=30,
+    *,  # serial defaults for one-shot gripper actions
+    serial_port: str = "/dev/ttyACM0",
+    baud_rate: int = 115200,
+):
+    target_file  = str(Path("Targets") / "paths.json")       # JSON path by id
     pose_file    = str(Path("Data") / "robot_pos.txt")
     command_file = str(Path("Data") / "command.txt")
     error_file   = str(Path("Data") / "error.txt")
@@ -940,14 +1017,19 @@ def exec_bot(robot_id=782, robot_padding=30):
     if not _path_for_robot_exists(target_file, robot_id):
         return "Path for specific robot doesn't exist. Generate path first"
 
-    ret = run_controller(
+    # One-shot sender closure for gripper
+    def _sender(action: str):
+        send_gripper_once(serial_port, baud_rate, robot_id, action)
+
+    run_controller(
         target_file, pose_file, command_file, error_file,
-        robot_id=robot_id, robot_padding=robot_padding
+        robot_id=robot_id, robot_padding=robot_padding,
+        gripper_sender=_sender,
     )
     return "Done executing"
 
 def exec_bot_with_thread(stop_event, robot_id=782, robot_padding=30):
-    target_file  = str(Path("Data") / "paths.json")     # JSON path by id
+    target_file  = str(Path("Targets") / "paths.json")       # JSON path by id
     pose_file    = str(Path("Data") / "robot_pos.txt")
     command_file = str(Path("Data") / "command.txt")
     error_file   = str(Path("Data") / "error.txt")
@@ -961,7 +1043,9 @@ def exec_bot_with_thread(stop_event, robot_id=782, robot_padding=30):
     run_controller(
         target_file, pose_file, command_file, error_file,
         stop_event=stop_event,
-        robot_id=robot_id, robot_padding=robot_padding
+        robot_id=robot_id, robot_padding=robot_padding,
+        # In this variant the serial thread might be started elsewhere;
+        # pass a gripper_queue via run_controller if you have one.
     )
     return "Done executing"
 
@@ -982,7 +1066,7 @@ def exec_robot_create_thread(
     robot_id = int(robot_id)
     robot_padding = int(robot_padding)
 
-    target_file  = str(Path("Data") / "paths.json")     # JSON path by id
+    target_file  = str(Path("Targets") / "paths.json")     # JSON path by id
     pose_file    = str(Path("Data") / "robot_pos.txt")
     error_file   = str(Path("Data") / "error.txt")
 
@@ -1000,6 +1084,7 @@ def exec_robot_create_thread(
             return f"Thread already running for robot {robot_id}"
 
         stop_event = threading.Event()
+        grip_q: "queue.Queue[str]" = queue.Queue()  # NEW
 
         # ---- Serial thread ----
         try:
@@ -1010,6 +1095,7 @@ def exec_robot_create_thread(
                 command_file=command_file,
                 stop_event=stop_event,
                 send_interval_s=send_interval_s,
+                gripper_queue=grip_q,   # NEW
             )
         except Exception as e:
             return f"Failed to start serial thread for robot {robot_id}: {e}"
@@ -1020,7 +1106,8 @@ def exec_robot_create_thread(
                 run_controller(
                     target_file, pose_file, command_file, error_file,
                     stop_event=stop_event,
-                    robot_id=robot_id, robot_padding=robot_padding
+                    robot_id=robot_id, robot_padding=robot_padding,
+                    gripper_queue=grip_q,  # NEW
                 )
             finally:
                 with _robot_threads_lock:
@@ -1035,6 +1122,7 @@ def exec_robot_create_thread(
             "ctrl_thread": ctrl_thread,
             "serial_thread": serial_thread,
             "stop_event": stop_event,
+            "gripper_queue": grip_q,     # NEW
             "started_at": time.time(),
             "ctrl_done": False,
         }
@@ -1075,4 +1163,4 @@ def stop_robot_thread(robot_id: int, join_timeout: float = 5.0):
 
 if __name__ == "__main__":
     # Example: run for robot id 1 and treat other robots as 30 px obstacles
-    print(exec_bot(robot_id=1, robot_padding=30))
+    print(exec_bot(robot_id=2, robot_padding=30))

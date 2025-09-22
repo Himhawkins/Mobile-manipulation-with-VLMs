@@ -1,7 +1,7 @@
 [
   {
     "name": "trace_targets",
-    "description": "Plans minimal waypoints to each target using A* with obstacle inflation and an offset fallback, then saves/updates a SIMPLE JSON file that only contains the robot id and its path. The saved JSON has the shape:\n{\n  \"robots\": [\n    {\n      \"id\": 782,\n      \"path\": [[sx, sy, 0], [x1, y1, d1], [x2, y2, d2], ...]\n    }\n  ]\n}\n- The first triple in `path` is always the robot start with delay=0.\n- If an entry for `id` already exists, it is replaced; otherwise it is appended.\n\nReturns:\n- \"Robot not found.\" if `robot_id` is provided but not present in Data/robot_pos.txt.\n- \"Path generation successful.\" after saving the JSON.\n\nExample Usage: `trace_targets(input_target_list=[[50,50],[150,150]], output_json_path='Data/paths.json', robot_id=782, spacing=50, delay=1000, offset=120)`",
+    "description": "Plans minimal waypoints to each target using A* with obstacle inflation and an offset fallback, then saves/updates a SIMPLE JSON that only contains the robot id and its path. Saved shape:\n{\n  \"robots\": [\n    {\n      \"id\": 782,\n      \"path\": [[sx, sy, 0], [x1, y1, d1], [x2, y2, d2], ...]\n    }\n  ]\n}\n- The first triple in `path` is always the robot start with delay=0.\n- If an entry for `id` already exists, it is replaced; otherwise appended.\n\nReturns:\n- \"Robot not found.\" if `robot_id` is not present in Data/robot_pos.txt.\n- \"Path generation successful.\" after saving the JSON.\n\nExample Usage: `trace_targets(input_target_list=[[50,50],[150,150]], robot_id=782, spacing=50, delay=1000, offset=120, path_json='Targets/paths.json')`",
     "parameters": {
       "type": "OBJECT",
       "properties": {
@@ -10,21 +10,12 @@
           "description": "Required. List of (x,y) target coordinates. Provide as a list of lists or tuples, e.g., [[50, 50], [150, 150]].",
           "items": {
             "type": "ARRAY",
-            "items": {
-              "type": "INTEGER"
-            }
+            "items": { "type": "INTEGER" }
           }
         },
-        "output_json_path": {
-          "type": "STRING",
-          "description": "Path to save the SIMPLE JSON (only id and path). Default: 'Data/paths.json'."
-        },
-        "start": {
-          "type": "ARRAY",
-          "description": "Optional start position (x, y). If not provided, uses the pose of `robot_id` from Data/robot_pos.txt, or the first robot if `robot_id` is omitted.",
-          "items": {
-            "type": "INTEGER"
-          }
+        "robot_id": {
+          "type": "INTEGER",
+          "description": "Required. Robot ID to read from Data/robot_pos.txt (rows: id,x,y,theta)."
         },
         "data_folder": {
           "type": "STRING",
@@ -35,26 +26,73 @@
           "description": "Dilation spacing (pixels) around obstacles for planning safety. Default: 50."
         },
         "delay": {
-          "type": "INTEGER",
-          "description": "Delay in milliseconds applied to EACH accepted target point. You may also pass an array of integers (one per target) if supported by your caller."
+          "description": "Delay in milliseconds applied to EACH accepted target point. Either a single integer or an array of integers (one per target).",
+          "oneOf": [
+            { "type": "INTEGER" },
+            {
+              "type": "ARRAY",
+              "items": { "type": "INTEGER" }
+            }
+          ]
         },
         "offset": {
           "type": "INTEGER",
           "description": "Offset distance (pixels) to try around a blocked target (N/E/S/W). Default: 100."
         },
-        "robot_id": {
-          "type": "INTEGER",
-          "description": "Required. Robot ID to read from Data/robot_pos.txt (multi-robot file with rows: id,x,y,theta)."
+        "path_json": {
+          "type": "STRING",
+          "description": "Path to save the SIMPLE JSON (only id and path). Default: 'Targets/paths.json'."
         },
         "verbose": {
           "type": "BOOLEAN",
           "description": "Set true to print debug logs during planning. Default: false."
         }
       },
-      "required": [
-        "input_target_list",
-        "robot_id"
-      ]
+      "required": ["input_target_list", "robot_id"]
+    }
+  },
+  {
+    "name": "pick_and_drop",
+    "description": "Plans a pick-and-drop mission for one robot and saves/updates the SAME SIMPLE JSON (only id and path). The path embeds gripper actions directly as the third field of a waypoint using the strings \"close\" (pick) and \"open\" (drop) — no separate actions list. Typical sequence:\n[start, 0] → [pick_approach, \"close\"] → [drop_approach, \"open\"].\n- Uses A* on an inflated mask.\n- For each target (pick/drop), finds a reachable base pose on the circle of radius `gripper_offset_px` around the target, preferring the current→target direction but trying nearby angles if needed.\n- The first triple is always the robot start with 0.\n- If an entry for `id` already exists, it is replaced; otherwise appended.\n\nReturns:\n- \"Robot not found.\" if `robot_id` is not present in Data/robot_pos.txt.\n- \"Unable to find reachable pick approach.\" if no feasible approach near the pick point.\n- \"Unable to find reachable drop approach.\" if no feasible approach near the drop point.\n- \"Pick & drop path generation successful.\" after saving the JSON.\n\nExample Usage: `pick_and_drop(robot_id=782, pick_coordinates=[600,220], drop_coordinates=[1200,480], data_folder='Data', spacing=50, gripper_offset_px=10, path_json='Targets/paths.json')`",
+    "parameters": {
+      "type": "OBJECT",
+      "properties": {
+        "robot_id": {
+          "type": "INTEGER",
+          "description": "Required. Robot ID to read from Data/robot_pos.txt (rows: id,x,y,theta)."
+        },
+        "pick_coordinates": {
+          "type": "ARRAY",
+          "description": "Required. [x, y] coordinate of the object to pick.",
+          "items": { "type": "INTEGER" }
+        },
+        "drop_coordinates": {
+          "type": "ARRAY",
+          "description": "Required. [x, y] coordinate where the object should be dropped.",
+          "items": { "type": "INTEGER" }
+        },
+        "data_folder": {
+          "type": "STRING",
+          "description": "Folder containing arena data, obstacles, robot poses, and the frame image. Default: 'Data'."
+        },
+        "spacing": {
+          "type": "INTEGER",
+          "description": "Dilation spacing (pixels) around obstacles for planning safety. Default: 50."
+        },
+        "gripper_offset_px": {
+          "type": "INTEGER",
+          "description": "Forward offset (pixels) from robot base to gripper tip; used to stop in front of the pick/drop target. Default: 10."
+        },
+        "path_json": {
+          "type": "STRING",
+          "description": "Path to save the SIMPLE JSON (only id and path). Default: 'Targets/paths.json'."
+        },
+        "verbose": {
+          "type": "BOOLEAN",
+          "description": "Set true to print debug logs during planning. Default: false."
+        }
+      },
+      "required": ["robot_id", "pick_coordinates", "drop_coordinates"]
     }
   }
 ]

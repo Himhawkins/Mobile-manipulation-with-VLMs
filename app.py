@@ -161,7 +161,7 @@ class DashboardApp(ctk.CTk):
                                   save_path="Data/realtime_obstacles.txt",
                                   ref_path="Data/frame_img.png",
                                   robot_path="Data/robot_pos.txt",
-                                  robot_padding=10)
+                                  robot_padding=20)
         # if pose:
         #     final_x, final_y, final_theta = pose
         #     # d_frame = draw_robot_pose(stitched, final_x, final_y, final_theta)
@@ -169,10 +169,10 @@ class DashboardApp(ctk.CTk):
         # else:
             # d_frame = stitched
         
-        d_frame = draw_robot_pose(stitched, robot_pos_path="Data/robot_pos.txt")
+        d_frame = draw_robot_pose(stitched)
 
-        overlay = overlay_obstacles(frame=d_frame, obstacles_path="Data/obstacles.txt")
-        draw_frame = draw_path_on_frame(overlay, path_file="Targets/path.txt")
+        overlay = overlay_obstacles(frame=d_frame)
+        draw_frame = draw_path_on_frame(overlay)
 
         img = display_frame(frame=draw_frame, target_w=cw, target_h=ch)
         if img:

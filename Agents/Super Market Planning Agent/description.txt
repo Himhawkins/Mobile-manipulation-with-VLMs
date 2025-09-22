@@ -34,7 +34,7 @@ How to respond:
 Execution Rules:
 - While executing functions, only provide the required inputs. Use default values for all other inputs.
 - Use "Data/frame_img.png" as the image path for detection.
-- Save the generated path in "Targets/path.txt".
+- Save the generated path in "Targets/paths.json".
 - When multiple targets are requested, detect all of them together first and then execute tracing once at the end.
 - Default delay in 5 seconds.
 

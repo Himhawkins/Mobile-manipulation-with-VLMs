@@ -47,7 +47,7 @@ def draw_robot_pose(frame, x=None, y=None, theta=None, corners=None,
                     box_color=(0, 0, 255), box_thickness=2,
                     center_color=(0, 0, 255), center_radius=4,
                     line_color=(0, 0, 255), line_thickness=2, line_len=20,
-                    robot_pos_path=None, draw_ids=True, font_scale=0.5, font_thickness=1):
+                    robot_pos_path="Data/robot_pos.txt", draw_ids=True, font_scale=0.5, font_thickness=1):
     """
     Modes:
       1) Single pose: if robot_pos_path is None, draws one robot using (x,y,theta[,corners]).

@@ -2,6 +2,7 @@ import customtkinter as ctk
 import tkinter as tk
 from PIL import Image, ImageTk
 import json
+import math
 import os
 import cv2
 from PIL import Image, ImageTk, ImageOps
@@ -309,101 +310,181 @@ def get_overlay_frame(
         print(f"[get_overlay_frame] Warp error: {e}")
         return overlay
 
-# def draw_path_on_frame(frame, path_file="path.txt", color=(0, 255, 0), thickness=2):
-#     if not os.path.exists(path_file):
-#         print(f"[draw_path_on_frame] Path file not found: {path_file}")
-#         return frame
-
-#     try:
-#         with open(path_file, "r") as f:
-#             pts = [tuple(map(int, line.strip().split(","))) for line in f if "," in line]
-
-#         if len(pts) < 3:
-#             return frame  # nothing to draw
-
-#         for i in range(1, len(pts)):
-#             cv2.line(frame, pts[i - 1], pts[i], color, thickness)
-
-#     except Exception as e:
-#         print(f"[draw_path_on_frame] Error: {e}")
-
-#     return frame
-
-import os
-import cv2
 
 def draw_path_on_frame(
     frame,
-    path_file="path.txt",
-    color=(0, 255, 0),
-    thickness=2,
-    show_checkpoints=True,             # set True to mark delay>0 points
+    json_path="Targets/paths.json",
+    # Colors to cycle through for different robots (BGR, OpenCV order)
+    colors=None,
+    # Dotted line controls
+    dot_gap_px=12,           # center-to-center spacing of dots
+    dot_radius=2,            # radius of each dot
+    # Markers
+    show_checkpoints=True,   # mark delay>0 and action points ("open"/"close")
     checkpoint_color=(0, 255, 255),
     checkpoint_radius=4,
-    annotate_delay=False,
+    action_open_color=(0, 255, 0),   # green
+    action_close_color=(0, 0, 255),  # red
+    action_radius=5,
+    annotate_delay=False,    # if True, also label numbers/"open"/"close"
     font=cv2.FONT_HERSHEY_SIMPLEX,
     font_scale=0.4,
-    text_thickness=1
+    text_thickness=1,
 ):
     """
-    Draws a polyline from a path file where each line is:
-        x,y,delay
-    - Only (x,y) are used to draw the path.
-    - If show_checkpoints is True, points with delay>0 are highlighted/annotated.
+    Draw dotted polylines for ALL robots listed in paths.json:
+
+    {
+      "robots": [
+        { "id": <int>, "path": [[x, y, tag], ...] },
+        ...
+      ]
+    }
+
+    The third element 'tag' can be:
+      - a number (delay in ms), e.g. 5000
+      - a string action "open" or "close"
+
+    - Each robot's path is drawn as a dotted line with evenly spaced filled circles.
+    - Dots are placed using 'dot_gap_px' across all segments.
+    - If show_checkpoints is True:
+        * numeric tag > 0 -> yellow checkpoint marker (+ optional numeric label)
+        * "open" -> green action marker (+ optional text)
+        * "close" -> red action marker (+ optional text)
     """
-    if not os.path.exists(path_file):
-        print(f"[draw_path_on_frame] Path file not found: {path_file}")
+    if not os.path.exists(json_path):
+        print(f"[draw_path_on_frame] JSON not found: {json_path}")
         return frame
 
-    pts = []       # list[(x, y)]
-    delays = []    # list[float]
-
     try:
-        with open(path_file, "r", encoding="utf-8") as f:
-            for ln, raw in enumerate(f, 1):
-                line = raw.strip()
-                if not line:
-                    continue
+        with open(json_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+    except Exception as e:
+        print(f"[draw_path_on_frame] Failed to read JSON: {e}")
+        return frame
 
-                # Accept comma- or space-separated
-                parts = [p for p in line.replace(",", " ").split() if p]
-                if len(parts) < 2:
-                    # malformed line; skip
-                    continue
+    robots = data.get("robots", [])
+    if not isinstance(robots, list) or len(robots) == 0:
+        return frame  # nothing to draw
 
-                try:
-                    x = int(float(parts[0]))
-                    y = int(float(parts[1]))
-                    d = float(parts[2]) if len(parts) >= 3 else 0.0
-                except ValueError:
-                    print(f"[draw_path_on_frame] Skipping bad line {ln}: '{raw.rstrip()}'")
-                    continue
+    # Default color palette (BGR)
+    if colors is None:
+        colors = [
+            (0, 255, 0),     # green
+            (0, 0, 255),     # red
+            (255, 0, 0),     # blue
+            (255, 255, 0),   # cyan
+            (255, 0, 255),   # magenta
+            (0, 255, 255),   # yellow
+            (0, 165, 255),   # orange
+            (128, 0, 128),   # purple-ish
+        ]
 
-                pts.append((x, y))
-                delays.append(d)
+    gap = max(2, int(dot_gap_px))
+    r = max(1, int(dot_radius))
+    act_r = max(2, int(action_radius))
+
+    def _draw_dotted_polyline(pts, color):
+        """Draw dots across all segments with even spacing."""
+        carry = 0.0
+        for i in range(1, len(pts)):
+            (x0, y0) = pts[i - 1]
+            (x1, y1) = pts[i]
+            dx, dy = (x1 - x0), (y1 - y0)
+            seg_len = math.hypot(dx, dy)
+            if seg_len <= 1e-6:
+                continue
+
+            dist_along = carry
+            while dist_along <= seg_len:
+                t = dist_along / seg_len
+                xi = int(round(x0 + t * dx))
+                yi = int(round(y0 + t * dy))
+                cv2.circle(frame, (xi, yi), r, color, -1)
+                dist_along += gap
+
+            carry = dist_along - seg_len if dist_along > seg_len else 0.0
+
+    def _parse_tag(raw):
+        """
+        Return ('delay', value) for numeric delays,
+               ('action', 'open'|'close') for string actions,
+               or (None, None) if not present/invalid.
+        """
+        if raw is None:
+            return (None, None)
+        # Try numeric first
+        try:
+            val = float(raw)
+            return ("delay", val)
+        except Exception:
+            pass
+        # Then action string
+        if isinstance(raw, str):
+            tag = raw.strip().lower()
+            if tag in ("open", "close"):
+                return ("action", tag)
+        return (None, None)
+
+    # Process each robot path
+    for idx, entry in enumerate(robots):
+        raw_path = entry.get("path", [])
+        if not isinstance(raw_path, list) or len(raw_path) < 2:
+            continue  # need at least two points
+
+        # Parse points for this robot
+        pts, tags = [], []  # tags: list of ('delay', value) or ('action', 'open'|'close') or (None, None)
+        for item in raw_path:
+            if not (isinstance(item, (list, tuple)) and len(item) >= 2):
+                continue
+            try:
+                x = int(item[0]); y = int(item[1])
+            except Exception:
+                continue
+            kind, val = _parse_tag(item[2] if len(item) >= 3 else None)
+            pts.append((x, y))
+            tags.append((kind, val))
 
         if len(pts) < 2:
-            return frame  # nothing to draw
+            continue
 
-        # Draw the polyline
-        for i in range(1, len(pts)):
-            cv2.line(frame, pts[i - 1], pts[i], color, thickness)
+        color = colors[idx % len(colors)]
+        _draw_dotted_polyline(pts, color)
 
-        # Optionally mark checkpoints (delay > 0)
-        if show_checkpoints:
-            for (x, y), d in zip(pts, delays):
-                if d > 0:
-                    cv2.circle(frame, (x, y), checkpoint_radius, checkpoint_color, -1)
+        if not show_checkpoints:
+            continue
+
+        # Draw markers for this robot: delay>0 or actions
+        for (x, y), (kind, val) in zip(pts, tags):
+            if kind == "delay":
+                try:
+                    if float(val) > 0:
+                        cv2.circle(frame, (x, y), checkpoint_radius, checkpoint_color, -1)
+                        if annotate_delay:
+                            cv2.putText(
+                                frame, f"{float(val):g}", (x + 5, y - 5),
+                                font, font_scale, checkpoint_color, text_thickness, cv2.LINE_AA
+                            )
+                except Exception:
+                    pass
+            elif kind == "action":
+                if val == "open":
+                    cv2.circle(frame, (x, y), act_r, action_open_color, 2)  # hollow circle
                     if annotate_delay:
                         cv2.putText(
-                            frame, f"{d:g}", (x + 5, y - 5),
-                            font, font_scale, checkpoint_color, text_thickness, cv2.LINE_AA
+                            frame, "open", (x + 5, y - 5),
+                            font, font_scale, action_open_color, text_thickness, cv2.LINE_AA
+                        )
+                elif val == "close":
+                    cv2.circle(frame, (x, y), act_r, action_close_color, -1)  # filled
+                    if annotate_delay:
+                        cv2.putText(
+                            frame, "close", (x + 5, y - 5),
+                            font, font_scale, action_close_color, text_thickness, cv2.LINE_AA
                         )
 
-    except Exception as e:
-        print(f"[draw_path_on_frame] Error: {e}")
-
     return frame
+
 
 
 def get_arena_dimensions(settings_path="Settings/settings.json"):

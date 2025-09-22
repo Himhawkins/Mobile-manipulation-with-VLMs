@@ -1,7 +1,44 @@
 #!/usr/bin/env python3
+"""
+Planning helpers + path writers (JSON-only).
+
+JSON format (simple):
+{
+  "robots": [
+    { "id": 782, "path": [[x, y, 0], [x2, y2, 5000], [x3, y3, "open"], ...] }
+  ]
+}
+
+Functions:
+- trace_targets(input_target_list, *, robot_id, data_folder="Data", spacing=50, delay=0,
+                offset=100, path_json="Targets/paths.json", verbose=False) -> str
+    - Builds a minimal waypoint list for robot_id: [start] + chosen targets
+      (each target is either the exact point if directly reachable, or a
+       4-direction offset (N,E,S,W) at `offset` px).
+    - Saves/updates JSON under the simple shape above (replaces entry if id exists).
+    - Returns:
+        "Robot not found."               if robot_id is not in Data/robot_pos.txt
+        "Path generation successful."    on success
+
+- pick_and_drop(robot_id, pick_coordinates, drop_coordinates, *,
+                data_folder="Data", spacing=50, gripper_offset_px=20,
+                path_json="Targets/paths.json", verbose=False) -> str
+    - Computes approach points a fixed distance (20 px default) from the pick and
+      drop coordinates, finds reachable ones, and writes:
+        [[sx,sy,0], [pick_approach_x, pick_approach_y, "close"],
+         [drop_approach_x, drop_approach_y, "open"]]
+    - Replaces/creates the JSON entry for the robot id.
+
+Dependencies:
+- astar.PathPlanner
+- Functions.Library.Agent.load_data.read_data
+- OpenCV, NumPy
+"""
 
 import os
 import json
+import math
+from datetime import datetime
 
 import cv2
 import numpy as np
@@ -10,55 +47,12 @@ from astar import PathPlanner
 from Functions.Library.Agent.load_data import read_data
 
 
-def _inflate_mask(mask: np.ndarray, spacing: int) -> np.ndarray:
-    """Inflate mask by `spacing` pixels (ellipse)."""
-    k = 2 * int(spacing) + 1
-    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (k, k))
-    return cv2.dilate(mask, kernel)
-
-
-def _try_plan(planner: PathPlanner, start_xy, goal_xy, simplify_dist=10) -> bool:
-    """Return True if a path exists from start_xy to goal_xy."""
-    path = planner.find_obstacle_aware_path(start_xy, goal_xy, simplify_dist)
-    return bool(path)
-
-
-def _choose_reachable_point(planner: PathPlanner, current_xy, target_xy, offset_px: int, log) -> tuple | None:
-    """
-    Choose either:
-      - target_xy (if directly reachable), or
-      - one of four offset positions at distance=offset_px (N,E,S,W) that is reachable.
-    Returns the chosen (x, y) or None if none are reachable.
-    """
-    log(f"  Trying direct plan: {current_xy} -> {target_xy}")
-    if _try_plan(planner, current_xy, target_xy):
-        log("    ✔ Direct path OK")
-        return target_xy
-
-    tx, ty = target_xy
-    candidates = [
-        (tx, ty - offset_px),  # North
-        (tx + offset_px, ty),  # East
-        (tx, ty + offset_px),  # South
-        (tx - offset_px, ty),  # West
-    ]
-
-    for p in candidates:
-        log(f"    Trying offset {p}")
-        if _try_plan(planner, current_xy, p):
-            log(f"    ✔ Using offset {p}")
-            return p
-
-    log("    ✖ No reachable offset")
-    return None
-
-
+# ---------- JSON I/O (simple {robots:[{id, path}]}) ----------
 def _load_paths_json(path: str) -> dict:
-    """Load JSON structure { 'robots': [ {id, path}, ... ] } or return empty."""
     if not os.path.exists(path):
         return {"robots": []}
     try:
-        with open(path, "r") as f:
+        with open(path, "r", encoding="utf-8") as f:
             data = json.load(f)
             if isinstance(data, dict) and "robots" in data and isinstance(data["robots"], list):
                 return data
@@ -68,23 +62,17 @@ def _load_paths_json(path: str) -> dict:
 
 
 def _save_paths_json(path: str, data: dict) -> None:
-    os.makedirs(os.path.dirname(path), exist_ok=True
-    )
-    with open(path, "w") as f:
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=2)
 
 
-def _upsert_robot_path(json_path: str, robot_id: int, path_points: list[list[int]]):
+def _upsert_robot_path(path_json: str, robot_id: int, path_points: list) -> None:
     """
-    Upsert robot path into JSON (SIMPLE form):
-    {
-      "id": <int>,
-      "path": [[x, y, delay], ...]  # includes start as the first triple [sx, sy, 0]
-    }
-    - If the robot id exists, replace its entry.
-    - Else, append new entry.
+    Upsert robot path into the simple JSON format.
+    path_points is a list of [x, y, delay_or_action].
     """
-    data = _load_paths_json(json_path)
+    data = _load_paths_json(path_json)
     robots = data.get("robots", [])
 
     new_entry = {
@@ -102,70 +90,168 @@ def _upsert_robot_path(json_path: str, robot_id: int, path_points: list[list[int
         robots.append(new_entry)
 
     data["robots"] = robots
-    _save_paths_json(json_path, data)
+    _save_paths_json(path_json, data)
 
 
+# ---------- Planning helpers ----------
+def _inflate_mask(mask: np.ndarray, spacing: int) -> np.ndarray:
+    """Inflate mask by `spacing` pixels (ellipse)."""
+    k = 2 * int(spacing) + 1
+    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (k, k))
+    return cv2.dilate(mask, kernel)
+
+
+def _path_exists(planner: PathPlanner, start_xy, goal_xy, simplify_dist: int = 10) -> bool:
+    """Return True if a path exists from start_xy to goal_xy."""
+    path = planner.find_obstacle_aware_path(start_xy, goal_xy, simplify_dist)
+    return bool(path)
+
+
+def _choose_reachable_point(planner: PathPlanner, current_xy, target_xy, offset_px: int, log) -> tuple | None:
+    """
+    Choose either:
+      - target_xy (if directly reachable), or
+      - one of four offset positions at distance=offset_px (N,E,S,W) that is reachable.
+    Returns the chosen (x, y) or None if none are reachable.
+    """
+    if _path_exists(planner, current_xy, target_xy):
+        log(f"  ✔ direct ok -> {target_xy}")
+        return target_xy
+
+    tx, ty = target_xy
+    candidates = [
+        (tx, ty - offset_px),  # N
+        (tx + offset_px, ty),  # E
+        (tx, ty + offset_px),  # S
+        (tx - offset_px, ty),  # W
+    ]
+    for p in candidates:
+        if _path_exists(planner, current_xy, p):
+            log(f"  ✔ using offset -> {p}")
+            return p
+
+    log("  ✖ no reachable offset")
+    return None
+
+
+def _point_in_free(mask: np.ndarray, pt: tuple[int, int]) -> bool:
+    """Check if pt lies in free space of the (binary) mask (0 = free)."""
+    x, y = int(pt[0]), int(pt[1])
+    H, W = mask.shape[:2]
+    if not (0 <= x < W and 0 <= y < H):
+        return False
+    return mask[y, x] == 0
+
+
+def _angle_spiral(center_angle: float, n: int):
+    """
+    Yield angles around center_angle in an outward spiral:
+    center, +d, -d, +2d, -2d, ...
+    with d = 2π/n (for a full circle coverage).
+    """
+    d = 2.0 * math.pi / max(1, n)
+    yield center_angle
+    k = 1
+    while k <= n // 2:
+        yield center_angle + k * d
+        yield center_angle - k * d
+        k += 1
+
+
+def _find_reachable_approach(planner: PathPlanner,
+                             current_xy: tuple[int, int],
+                             target_xy: tuple[int, int],
+                             radius_px: int,
+                             log,
+                             n_angles: int = 32) -> tuple[int, int] | None:
+    """
+    Find a base position around `target_xy` on the circle of radius `radius_px`
+    that is reachable from `current_xy`. Preference is given to the point aligned
+    with the vector current->target; otherwise we search angles around it.
+    """
+    cx, cy = current_xy
+    tx, ty = target_xy
+
+    vx, vy = (tx - cx, ty - cy)
+    norm = math.hypot(vx, vy)
+    if norm < 1e-6:
+        # If we're already at the target, pick an arbitrary direction
+        base_angle = 0.0
+    else:
+        base_angle = math.atan2(vy, vx)
+
+    H, W = planner.mask.shape[:2]
+
+    for ang in _angle_spiral(base_angle, n_angles):
+        # Place base point so that gripper (ahead by radius) would sit at target
+        ax = int(round(tx - radius_px * math.cos(ang)))
+        ay = int(round(ty - radius_px * math.sin(ang)))
+
+        if not (0 <= ax < W and 0 <= ay < H):
+            continue
+        if not _point_in_free(planner.mask, (ax, ay)):
+            continue
+        if _path_exists(planner, current_xy, (ax, ay)):
+            log(f"  ✔ approach {radius_px}px at angle={math.degrees(ang):.1f} -> ({ax},{ay})")
+            return (ax, ay)
+
+    log("  ✖ no reachable approach on circle")
+    return None
+
+
+# ---------- Public APIs ----------
 def trace_targets(
     input_target_list,
-    output_json_path="Data/paths.json",
-    start=None,
-    data_folder="Data",
-    spacing=50,
-    delay=0,
-    offset=100,
-    robot_id=None,
-    verbose=False,
-):
+    *,
+    robot_id: int,
+    data_folder: str = "Data",
+    spacing: int = 50,
+    delay: int | list[int] = 0,
+    offset: int = 100,
+    path_json: str = "Targets/paths.json",
+    verbose: bool = False,
+) -> str:
     """
-    Build a minimal list of points:
-      path = [[sx, sy, 0], [x1, y1, d1], [x2, y2, d2], ...]
-    where each subsequent point is either the target itself (if reachable) or a
-    reachable offset (N/E/S/W by `offset` px). Persist to SIMPLE JSON.
+    Build a minimal list of points for `robot_id`: [start] + [chosen targets],
+    where each target is either the original (if directly reachable) or one of
+    four offset points (N,E,S,W) at `offset` px.
+
+    Saves JSON as:
+      { "robots": [ { "id": <robot_id>, "path": [[x,y,delay_or_0], ...] } ] }
 
     Returns:
-    - "Robot not found."
-    - "Path generation successful."
+      - "Robot not found."
+      - "Path generation successful."
     """
-    log = print if verbose else (lambda *_: None)
+    log = print if verbose else (lambda *a, **k: None)
 
-    # --- Load data ---
+    # --- Load environment & robot pose ---
     data = read_data(data_folder)
     if data is None:
         raise RuntimeError(f"Could not read data from '{data_folder}'")
 
+    robots = data.get("robot_pos", None)
+    if robots is None or len(robots) == 0:
+        return "Robot not found."
+
+    matches = robots[np.where(robots[:, 0].astype(int) == int(robot_id))] if isinstance(robots, np.ndarray) else []
+    if matches is None or len(matches) == 0:
+        return "Robot not found."
+
+    sx, sy = int(matches[0][1]), int(matches[0][2])
+    start_xy = (sx, sy)
+
     arena = [tuple(map(int, row)) for row in data.get("arena_corners", [])]
-    polygon_obs = [[tuple(map(int, pt)) for pt in poly] for poly in data.get("obstacles", [])]
-    robots_arr = data.get("robot_pos", None)
+    polys = [[tuple(map(int, p)) for p in poly] for poly in data.get("obstacles", [])]
 
-    # --- Resolve robot start pose ---
-    if robots_arr is not None and len(robots_arr) > 0:
-        if robot_id is None:
-            rid, rx, ry, _ = robots_arr[0]
-            robot_id = int(rid)
-            log(f"[info] robot_id not provided; defaulting to first robot id={robot_id}")
-        else:
-            matches = robots_arr[np.where(robots_arr[:, 0].astype(int) == int(robot_id))]
-            if matches.shape[0] == 0:
-                return "Robot not found."
-            rx, ry = matches[0][1], matches[0][2]
-
-        if start is None:
-            start = (int(rx), int(ry))
-    else:
-        # No robots in data at all
-        if robot_id is not None:
-            return "Robot not found."
-        if start is None:
-            raise RuntimeError("No robot poses available and no explicit start provided.")
-
-    # --- Prepare planner ---
+    # --- Planner with inflated mask ---
     frame_path = os.path.join(data_folder, "frame_img.png")
     frame = cv2.imread(frame_path)
     if frame is None:
         raise FileNotFoundError(f"Could not load image at '{frame_path}'")
     H, W = frame.shape[:2]
 
-    obstacles = [{"corners": poly} for poly in polygon_obs]
+    obstacles = [{"corners": poly} for poly in polys]
     planner = PathPlanner(obstacles, (H, W), arena_corners=arena)
     planner.mask = _inflate_mask(planner.mask, int(spacing))
 
@@ -178,40 +264,160 @@ def trace_targets(
         if len(delays) != len(targets):
             raise ValueError("Length of 'delay' must match number of targets")
 
-    # --- Build minimal path list: START + chosen (with offsets) ---
-    current = (int(start[0]), int(start[1]))
-    json_path_points: list[list[int]] = [[current[0], current[1], 0]]  # include start first
-    log(f"[trace] start={current} spacing={spacing}px offset={offset}px")
+    # --- Build JSON path: include start as first point with delay 0 ---
+    out_path: list[list[int | str]] = [[start_xy[0], start_xy[1], 0]]
+    current = start_xy
 
-    for i, (tgt, d) in enumerate(zip(targets, delays)):
+    log(f"[trace] id={robot_id} start={current} spacing={spacing}px offset={offset}px")
+    for i, tgt in enumerate(targets):
         log(f"[target {i+1}] desired={tgt}")
-        chosen = _choose_reachable_point(planner, current, tgt, int(offset), log)
-        if chosen is not None:
-            cx, cy = int(chosen[0]), int(chosen[1])
-            json_path_points.append([cx, cy, int(d)])
-            current = (cx, cy)
-            log(f"  -> appended: {[cx, cy, int(d)]}")
-        else:
-            log(f"  -> skipping unreachable target {tgt}")
+        choice = _choose_reachable_point(planner, current, tgt, int(offset), log)
+        if choice is None:
+            log(f"  -> skipping unreachable {tgt}")
+            continue
+        d = delays[i]
+        out_path.append([int(choice[0]), int(choice[1]), int(d)])
+        current = (int(choice[0]), int(choice[1]))
+        log(f"  -> chosen {choice} (delay={d})")
 
-    # --- Save/replace in SIMPLE JSON by id ---
-    robot_id_to_save = 0 if robot_id is None else int(robot_id)
-    _upsert_robot_path(output_json_path, robot_id_to_save, json_path_points)
-    log(f"[write] paths.json (id={robot_id_to_save}) -> {output_json_path}")
+    # Upsert into JSON
+    _upsert_robot_path(path_json, int(robot_id), out_path)
+    log(f"[save] {path_json} updated for id={robot_id}")
 
     return "Path generation successful."
 
 
-# ---- Quick local test ----
+def pick_and_drop(
+    robot_id: int,
+    pick_coordinates: tuple[int, int],
+    drop_coordinates: tuple[int, int],
+    *,
+    data_folder: str = "Data",
+    spacing: int = 50,
+    gripper_offset_px: int = 10,
+    path_json: str = "Targets/paths.json",
+    verbose: bool = False,
+) -> str:
+    """
+    Generate a path for picking and dropping an object with a forward gripper.
+
+    The robot base must stop ~`gripper_offset_px` in front of the pick/drop points
+    so that the gripper (mounted forward) is at the exact pick/drop coordinates.
+
+    Output JSON path for robot_id:
+      [[sx,sy,0],
+       [pick_approach_x, pick_approach_y, "close"],
+       [drop_approach_x, drop_approach_y, "open"]]
+
+    If an approach point isn't directly reachable along the current->target line,
+    we search the circle around the target and pick the first reachable free point.
+
+    Returns a short status string.
+    """
+    log = print if verbose else (lambda *a, **k: None)
+
+    # --- Load environment & pose ---
+    data = read_data(data_folder)
+    if data is None:
+        raise RuntimeError(f"Could not read data from '{data_folder}'")
+
+    robots = data.get("robot_pos", None)
+    if robots is None or len(robots) == 0:
+        return "Robot not found."
+
+    matches = robots[np.where(robots[:, 0].astype(int) == int(robot_id))] if isinstance(robots, np.ndarray) else []
+    if matches is None or len(matches) == 0:
+        return "Robot not found."
+
+    sx, sy = int(matches[0][1]), int(matches[0][2])
+    start_xy = (sx, sy)
+
+    arena = [tuple(map(int, row)) for row in data.get("arena_corners", [])]
+    polys = [[tuple(map(int, p)) for p in poly] for poly in data.get("obstacles", [])]
+
+    frame_path = os.path.join(data_folder, "frame_img.png")
+    frame = cv2.imread(frame_path)
+    if frame is None:
+        raise FileNotFoundError(f"Could not load image at '{frame_path}'")
+    H, W = frame.shape[:2]
+
+    obstacles = [{"corners": poly} for poly in polys]
+    planner = PathPlanner(obstacles, (H, W), arena_corners=arena)
+    planner.mask = _inflate_mask(planner.mask, int(spacing))
+
+    # --- Compute approaches ---
+    pick_xy = (int(pick_coordinates[0]), int(pick_coordinates[1]))
+    drop_xy = (int(drop_coordinates[0]), int(drop_coordinates[1]))
+
+    log(f"[pick&drop] id={robot_id} start={start_xy} spacing={spacing}px approach_r={gripper_offset_px}px")
+    log(f"  pick={pick_xy}  drop={drop_xy}")
+
+    # Approach for pick
+    pick_app = _find_reachable_approach(planner, start_xy, pick_xy, gripper_offset_px, log)
+    if pick_app is None:
+        return "Unable to find reachable pick approach."
+
+    # Approach for drop (plan starting from pick point itself; controller will handle motion)
+    # We base angle preference on pick->drop direction.
+    pick_base_for_drop = pick_xy  # After 'close' at pick_app, we conceptually move onto pick_xy; controller will approach from pick_app.
+    drop_app = _find_reachable_approach(planner, pick_base_for_drop, drop_xy, gripper_offset_px, log)
+    if drop_app is None:
+        return "Unable to find reachable drop approach."
+
+    # Build path: include start, then pick approach ("close"), then drop approach ("open")
+    path_points = [
+        [start_xy[0], start_xy[1], 0],
+        [pick_app[0], pick_app[1], "close"],
+        [drop_app[0], drop_app[1], "open"],
+    ]
+
+    _upsert_robot_path(path_json, int(robot_id), path_points)
+    log(f"[save] {path_json} updated for id={robot_id}")
+
+    return "Pick & drop path generation successful."
+
+
+# ---------- Quick tests ----------
 if __name__ == "__main__":
-    msg = trace_targets(
-        input_target_list=[(1331, 479), (48, 265)],
-        output_json_path="Targets/paths.json",
-        data_folder="Data",
-        spacing=20,
-        delay=5000,
-        offset=100,
-        robot_id=782,   # or set a valid id
-        verbose=False
-    )
-    print(msg)
+    # Adjust these to your local map/poses to test quickly.
+    # Assumes:
+    # - Data/frame_img.png exists
+    # - Data/robot_pos.txt has at least one line: id,x,y,theta   (e.g., "782,810,278,0.0")
+    # - Functions.Library.Agent.load_data.read_data understands your Data/* files
+
+    TEST_ROBOT_ID = 2
+    PATH_JSON = "Targets/paths.json"
+
+    # 1) trace_targets test
+    # try:
+    #     print("=== trace_targets test ===")
+    #     msg = trace_targets(
+    #         input_target_list=[(1331, 379), (148, 265)],
+    #         robot_id=TEST_ROBOT_ID,
+    #         data_folder="Data",
+    #         spacing=40,
+    #         delay=5000,
+    #         offset=100,
+    #         path_json=PATH_JSON,
+    #         verbose=True,
+    #     )
+    #     print("trace_targets:", msg)
+    # except Exception as e:
+    #     print("[test trace_targets] error:", e)
+
+    # 2) pick_and_drop test
+    try:
+        print("\n=== pick_and_drop test ===")
+        msg2 = pick_and_drop(
+            robot_id=TEST_ROBOT_ID,
+            pick_coordinates=(800, 320),
+            drop_coordinates=(820, 360),
+            data_folder="Data",
+            spacing=40,
+            gripper_offset_px=10,
+            path_json=PATH_JSON,
+            verbose=True,
+        )
+        print("pick_and_drop:", msg2)
+    except Exception as e:
+        print("[test pick_and_drop] error:", e)
