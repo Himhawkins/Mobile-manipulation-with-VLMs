@@ -1,17 +1,33 @@
 [
   {
     "name": "exec_robot_create_thread",
-    "description": "Starts a background controller thread for a specific robot. Validates that the robot_id exists in Data/robot_pos.txt (lines formatted as id,x,y,theta). If the ID doesn't exist, returns \"Selected ID doesn't exist\". If a thread for this robot is already running, returns \"Thread already running for robot <id>\". On success, returns \"Started thread for robot <id>\".\n\nThe controller reads targets from Targets/path.txt, reads poses from Data/robot_pos.txt, writes wheel commands to Data/command.txt, and logs errors to Data/error.txt. Other robots can be treated as circular obstacles via robot_padding.\n\nExample Usage: \"exec_robot_create_thread(robot_id=782)\"",
+    "description": "Spawn a background controller thread AND a serial-sender thread for the given robot_id. Uses Targets/paths.json (per-id paths) and Data/robot_pos.txt (poses). Returns one of: \"Selected ID doesn't exist\", \"Path for specific robot doesn't exist. Generate path first\", \"Thread already running for robot <id>\", \"Started thread for robot <id>\", or \"Failed to start serial thread for robot <id>: <error>\".",
     "parameters": {
       "type": "OBJECT",
       "properties": {
         "robot_id": {
           "type": "INTEGER",
-          "description": "ID of the robot to control (matches the first column in Data/robot_pos.txt). Example: 782."
+          "description": "Robot ID (must appear in Data/robot_pos.txt). Example: 782."
         },
         "robot_padding": {
           "type": "INTEGER",
-          "description": "Radius (in pixels) to stamp around OTHER robots as obstacles. Set 0 to ignore other robots. Default: 30."
+          "description": "Pixels to treat OTHER robots as circular obstacles during planning. Default: 30."
+        },
+        "serial_port": {
+          "type": "STRING",
+          "description": "Serial device for the robot’s motor/gripper bridge. Default: \"/dev/ttyACM0\"."
+        },
+        "baud_rate": {
+          "type": "INTEGER",
+          "description": "Baud rate for the serial bridge. Default: 115200."
+        },
+        "command_file": {
+          "type": "STRING",
+          "description": "Path of the file the controller writes wheel commands to; the serial thread streams this file. Default: \"Data/command.txt\"."
+        },
+        "send_interval_s": {
+          "type": "NUMBER",
+          "description": "Interval (seconds) between serial sends from the command file. Default: 0.1."
         }
       },
       "required": ["robot_id"]
@@ -19,17 +35,17 @@
   },
   {
     "name": "stop_robot_thread",
-    "description": "Stops the running controller thread for the given robot_id. Signals the thread's stop_event and waits up to join_timeout seconds for it to exit. Returns \"Stopped thread for robot <id>\" if it finishes in time, \"Stop requested; robot <id> is still stopping\" if it hasn't finished yet, or \"No running thread for robot <id>\" if none is active.\n\nExample Usage: \"stop_robot_thread(robot_id=782)\"",
+    "description": "Signals the running controller+serial threads for the given robot_id to stop and waits briefly. Returns one of: \"No running thread for robot <id>\", \"Stop requested; robot <id> is still stopping\", or \"Stopped thread for robot <id>\".",
     "parameters": {
       "type": "OBJECT",
       "properties": {
         "robot_id": {
           "type": "INTEGER",
-          "description": "ID of the robot whose thread should be stopped."
+          "description": "Robot ID whose threads should be stopped."
         },
         "join_timeout": {
           "type": "NUMBER",
-          "description": "Seconds to wait for the thread to join after signaling stop. Default: 5.0."
+          "description": "Seconds to wait for threads to join after signaling stop. Default: 5.0."
         }
       },
       "required": ["robot_id"]

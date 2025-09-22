@@ -77,34 +77,61 @@ def _load_paths_json(json_path: str) -> dict:
 
 def _get_robot_path_from_json(json_path: str, robot_id: int):
     """
-    Returns list of (x, y, action) for robot_id from json_path,
+    Returns list of (x, y, theta_rad, action) for robot_id from json_path,
     where action is int delay_ms OR str 'open'/'close'.
     Returns None if not found or malformed.
+
+    Expected item shapes inside JSON:
+      [x, y]                                  -> theta=0.0, action=0
+      [x, y, theta]                           -> theta=float (rad), action=0
+      [x, y, theta, action]                   -> full spec
+      [x, y, action]  (legacy 3-tuple)        -> theta=0.0, action=parsed
     """
     data = _load_paths_json(json_path)
     for entry in data.get("robots", []):
         try:
-            if int(entry.get("id", -1)) == int(robot_id):
-                triples = entry.get("path", [])
-                out = []
-                for t in triples:
-                    if not isinstance(t, (list, tuple)) or len(t) < 2:
-                        continue
-                    x = int(t[0])
-                    y = int(t[1])
-                    action = 0
-                    if len(t) >= 3:
-                        raw = t[2]
-                        if isinstance(raw, str):
-                            s = raw.strip().lower()
-                            action = s if s in ("open", "close") else 0
+            if int(entry.get("id", -1)) != int(robot_id):
+                continue
+            items = entry.get("path", [])
+            out = []
+            for t in items:
+                if not isinstance(t, (list, tuple)) or len(t) < 2:
+                    continue
+                x = int(t[0]); y = int(t[1])
+
+                theta = 0.0
+                action = 0
+
+                # 3rd field: could be theta (float) or action (str)
+                if len(t) >= 3:
+                    third = t[2]
+                    if isinstance(third, str):
+                        s = third.strip().lower()
+                        if s in ("open", "close"):
+                            theta = 0.0
+                            action = s
                         else:
-                            try:
-                                action = int(raw)
-                            except Exception:
-                                action = 0
-                    out.append((x, y, action))
-                return out if out else None
+                            pass  # unknown string → ignore
+                    else:
+                        try:
+                            theta = float(third)
+                        except Exception:
+                            theta = 0.0
+
+                # 4th field: action
+                if len(t) >= 4:
+                    raw = t[3]
+                    if isinstance(raw, str):
+                        s = raw.strip().lower()
+                        action = s if s in ("open", "close") else 0
+                    else:
+                        try:
+                            action = int(raw)
+                        except Exception:
+                            action = 0
+
+                out.append((x, y, theta, action))
+            return out if out else None
         except Exception:
             continue
     return None
@@ -118,7 +145,8 @@ class FileInterface:
     def __init__(self, target_file, pose_file, command_file, error_file, robot_id=None):
         """
         target_file can be a JSON path (e.g., 'Data/paths.json') or legacy TXT.
-        When JSON, it expects entries with [x, y, <delay|\"open\"|\"close\">] for the selected robot_id.
+        When JSON, it expects entries with [x, y, theta_rad, <delay|\"open\"|\"close\">]
+        for the selected robot_id. Legacy TXT has no theta (we synthesize 0.0).
         """
         self.target_file = target_file
         self.pose_file = pose_file
@@ -145,20 +173,20 @@ class FileInterface:
 
     def read_targets(self):
         """
-        Returns a list of (x, y, action) where action is:
+        Returns a list of (x, y, theta_rad, action) where action is:
           - int delay_ms
           - str 'open' / 'close'
-        Supports JSON (recommended) and legacy TXT (delay only).
+        Supports JSON (recommended) and legacy TXT (delay only, theta=0).
         """
         # JSON mode
         if str(self.target_file).lower().endswith(".json"):
             if self.robot_id is None:
                 print("[WARN] target_file is JSON but robot_id not provided; no targets.")
                 return []
-            triples = _get_robot_path_from_json(self.target_file, self.robot_id)
-            return triples if triples is not None else []
+            quads = _get_robot_path_from_json(self.target_file, self.robot_id)
+            return quads if quads is not None else []
 
-        # Legacy TXT mode
+        # Legacy TXT mode (no theta in file → theta=0.0)
         lines = self._load_lines(self.target_file)
         out = []
         for line in lines:
@@ -168,7 +196,7 @@ class FileInterface:
                     continue
                 x = float(parts[0]); y = float(parts[1])
                 delay_ms = int(float(parts[2])) if len(parts) >= 3 else 0
-                out.append((x, y, delay_ms))
+                out.append((x, y, 0.0, delay_ms))
             except Exception as e:
                 print(f"[WARN] Skipping malformed target '{line}': {e}")
         return out
@@ -501,7 +529,7 @@ def _nearest_free(mask, x, y, r_max=50):
         y0, y1 = max(0, y - r), min(H - 1, y + r)
         for xx in range(x0, x1 + 1):
             if mask[y0, xx] == 0: return (xx, y0)
-            if mask[y1, xx] == 0: return (xx, y1)
+            if mask[y1, xx] == 0: return (xx, yy)
         for yy in range(y0 + 1, y1):
             if mask[yy, x0] == 0: return (x0, yy)
             if mask[yy, x1] == 0: return (x1, yy)
@@ -836,7 +864,8 @@ class PIDController:
                 self._pose_still_cnt = 0
             self._last_pose = cur_pose
 
-            goal_x, goal_y, action = targets[idx]  # action: int delay OR 'open'/'close'
+            # Unpack new quadruple (x, y, theta_goal, action)
+            goal_x, goal_y, goal_theta, action = targets[idx]  # theta is radians
 
             if not self._ensure_segment_path((x, y), (goal_x, goal_y)):
                 _dbg(f"NO_PLAN: waiting for feasible path to target {idx+1} ({goal_x:.1f},{goal_y:.1f})...", self._tick)
@@ -873,10 +902,63 @@ class PIDController:
                 if self._seg_index >= len(self._seg_path):
                     # reached final segment point for this target
                     if math.hypot(goal_x - x, goal_y - y) < self.final_distance_tol:
-                        # stop briefly at the point
+                        # 1) Stop at the point
                         self.iface.write_command(self.speed_neutral, self.speed_neutral)
 
-                        # Handle action: delay OR gripper
+                        # 2) Align to desired goal_theta (radians) before action
+                        try:
+                            ang_tol_rad = math.radians(self.ang_tolerance_deg)
+                        except Exception:
+                            ang_tol_rad = math.radians(18.0)
+
+                        # re-read current pose to get fresh theta before aligning
+                        x, y, theta = self.iface.read_pos()
+                        # goal_theta may come from legacy zeros; ensure float
+                        try:
+                            gth = float(goal_theta)
+                        except Exception:
+                            gth = 0.0
+
+                        t_align_start = time.time()
+                        ALIGN_TIMEOUT_S = 3.0  # safety timeout; adjust as needed
+
+                        while True:
+                            # heading error to goal orientation
+                            ang_err_goal = self.normalize(gth - theta)
+                            if abs(ang_err_goal) <= ang_tol_rad:
+                                break
+
+                            # rotate in place using angular PID only
+                            now2 = time.time()
+                            dt2 = max(1e-3, now2 - self.prev_time)
+                            self.prev_time = now2
+
+                            self.integral_ang += ang_err_goal * dt2
+                            I_LIM = 0.4
+                            if self.integral_ang > I_LIM:  self.integral_ang = I_LIM
+                            if self.integral_ang < -I_LIM: self.integral_ang = -I_LIM
+
+                            deriv_ang = (ang_err_goal - self.prev_ang_err) / dt2
+                            self.prev_ang_err = ang_err_goal
+
+                            ang_ctrl = (self.Kp_ang * ang_err_goal) + (self.Ki_ang * self.integral_ang) + (self.Kd_ang * deriv_ang)
+
+                            left  = self.speed_neutral - ang_ctrl
+                            right = self.speed_neutral + ang_ctrl
+                            left  = max(self.speed_min, min(self.speed_max, self._adjust_speed(left)))
+                            right = max(self.speed_min, min(self.speed_max, self._adjust_speed(right)))
+                            self.iface.write_command(left, right)
+
+                            time.sleep(0.03)
+                            _x, _y, theta = self.iface.read_pos()
+
+                            if (stop_event and stop_event.is_set()) or (time.time() - t_align_start) > ALIGN_TIMEOUT_S:
+                                break
+
+                        # stop motors after align
+                        self.iface.write_command(self.speed_neutral, self.speed_neutral)
+
+                        # 3) Handle action: delay OR gripper
                         if isinstance(action, str) and action in ("open", "close"):
                             _dbg(f"GRIPPER: {action} at ({goal_x},{goal_y})", self._tick)
                             self._do_gripper_action(action)
@@ -902,7 +984,7 @@ class PIDController:
                         continue
                 continue
 
-            # PID
+            # PID to current waypoint
             heading = math.atan2(ty - y, tx - x)
             ang_err = self.normalize(heading - theta)
 
@@ -917,7 +999,7 @@ class PIDController:
             ang_ctrl = (self.Kp_ang * ang_err) + (self.Ki_ang * self.integral_ang) + (self.Kd_ang * deriv_ang)
             lin_ctrl = max(-self.max_lin, min(self.max_lin, self.Kp_dist * dist_to_wp))
 
-            # Proximity slowdown
+            # Proximity slowdown (based on clearance distance transform)
             dtc = self.cache.clearance_dt
             if dtc is not None:
                 iy = int(np.clip(round(y), 0, dtc.shape[0]-1))

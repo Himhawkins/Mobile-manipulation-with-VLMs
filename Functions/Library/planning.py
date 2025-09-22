@@ -198,6 +198,12 @@ def _find_reachable_approach(planner: PathPlanner,
     log("  ✖ no reachable approach on circle")
     return None
 
+def _heading_rad(p_from: tuple[int, int], p_to: tuple[int, int]) -> float:
+    """Return heading (radians) from p_from -> p_to, in (-π, π]."""
+    dx = float(p_to[0] - p_from[0])
+    dy = float(p_to[1] - p_from[1])
+    return math.atan2(dy, dx)
+
 
 # ---------- Public APIs ----------
 def trace_targets(
@@ -217,7 +223,7 @@ def trace_targets(
     four offset points (N,E,S,W) at `offset` px.
 
     Saves JSON as:
-      { "robots": [ { "id": <robot_id>, "path": [[x,y,delay_or_0], ...] } ] }
+      { "robots": [ { "id": <robot_id>, "path": [[x,y,theta_rad,delay_or_0], ...] } ] }
 
     Returns:
       - "Robot not found."
@@ -239,6 +245,13 @@ def trace_targets(
         return "Robot not found."
 
     sx, sy = int(matches[0][1]), int(matches[0][2])
+    # try to read initial heading (deg) if present (4th column)
+    s_theta_deg = None
+    try:
+        s_theta_deg = float(matches[0][3])
+    except Exception:
+        s_theta_deg = None
+
     start_xy = (sx, sy)
 
     arena = [tuple(map(int, row)) for row in data.get("arena_corners", [])]
@@ -264,8 +277,8 @@ def trace_targets(
         if len(delays) != len(targets):
             raise ValueError("Length of 'delay' must match number of targets")
 
-    # --- Build JSON path: include start as first point with delay 0 ---
-    out_path: list[list[int | str]] = [[start_xy[0], start_xy[1], 0]]
+    # --- Choose points (either target or offset) ---
+    chosen_points: list[tuple[int, int]] = []
     current = start_xy
 
     log(f"[trace] id={robot_id} start={current} spacing={spacing}px offset={offset}px")
@@ -275,12 +288,28 @@ def trace_targets(
         if choice is None:
             log(f"  -> skipping unreachable {tgt}")
             continue
-        d = delays[i]
-        out_path.append([int(choice[0]), int(choice[1]), int(d)])
-        current = (int(choice[0]), int(choice[1]))
-        log(f"  -> chosen {choice} (delay={d})")
+        choice = (int(choice[0]), int(choice[1]))
+        chosen_points.append(choice)
+        current = choice
+        log(f"  -> chosen {choice} (delay={delays[i]})")
 
-    # Upsert into JSON
+    # --- Build JSON path with theta in radians ---
+    if s_theta_deg is None:
+        if len(chosen_points) > 0:
+            s_theta = _heading_rad(start_xy, chosen_points[0])
+        else:
+            s_theta = 0.0
+    else:
+        s_theta = math.radians(s_theta_deg)
+
+    out_path: list[list[int | float | str]] = [[start_xy[0], start_xy[1], float(s_theta), 0]]
+
+    prev = start_xy
+    for i, pt in enumerate(chosen_points):
+        th = _heading_rad(prev, pt)
+        out_path.append([pt[0], pt[1], float(th), int(delays[i])])
+        prev = pt
+
     _upsert_robot_path(path_json, int(robot_id), out_path)
     log(f"[save] {path_json} updated for id={robot_id}")
 
@@ -294,25 +323,17 @@ def pick_and_drop(
     *,
     data_folder: str = "Data",
     spacing: int = 50,
-    gripper_offset_px: int = 40,
+    gripper_offset_px: int = 10,
     path_json: str = "Targets/paths.json",
     verbose: bool = False,
 ) -> str:
     """
     Generate a path for picking and dropping an object with a forward gripper.
 
-    The robot base must stop ~`gripper_offset_px` in front of the pick/drop points
-    so that the gripper (mounted forward) is at the exact pick/drop coordinates.
-
-    Output JSON path for robot_id:
-      [[sx,sy,0],
-       [pick_approach_x, pick_approach_y, "close"],
-       [drop_approach_x, drop_approach_y, "open"]]
-
-    If an approach point isn't directly reachable along the current->target line,
-    we search the circle around the target and pick the first reachable free point.
-
-    Returns a short status string.
+    Output JSON path for robot_id (theta in radians):
+      [[sx,sy,theta_start,0],
+       [pick_approach_x, pick_approach_y, theta_face_pick, "close"],
+       [drop_approach_x, drop_approach_y, theta_face_drop, "open"]]
     """
     log = print if verbose else (lambda *a, **k: None)
 
@@ -331,6 +352,13 @@ def pick_and_drop(
 
     sx, sy = int(matches[0][1]), int(matches[0][2])
     start_xy = (sx, sy)
+
+    # read initial theta if present (deg → rad)
+    s_theta_deg = None
+    try:
+        s_theta_deg = float(matches[0][3])
+    except Exception:
+        s_theta_deg = None
 
     arena = [tuple(map(int, row)) for row in data.get("arena_corners", [])]
     polys = [[tuple(map(int, p)) for p in poly] for poly in data.get("obstacles", [])]
@@ -352,29 +380,36 @@ def pick_and_drop(
     log(f"[pick&drop] id={robot_id} start={start_xy} spacing={spacing}px approach_r={gripper_offset_px}px")
     log(f"  pick={pick_xy}  drop={drop_xy}")
 
-    # Approach for pick
     pick_app = _find_reachable_approach(planner, start_xy, pick_xy, gripper_offset_px, log)
     if pick_app is None:
         return "Unable to find reachable pick approach."
 
-    # Approach for drop (plan starting from pick point itself; controller will handle motion)
-    # We base angle preference on pick->drop direction.
-    pick_base_for_drop = pick_xy  # After 'close' at pick_app, we conceptually move onto pick_xy; controller will approach from pick_app.
-    drop_app = _find_reachable_approach(planner, pick_base_for_drop, drop_xy, gripper_offset_px, log)
+    # Bias drop search by pick->drop direction (we pass pick_xy as the "current" base)
+    drop_app = _find_reachable_approach(planner, pick_xy, drop_xy, gripper_offset_px, log)
     if drop_app is None:
         return "Unable to find reachable drop approach."
 
-    # Build path: include start, then pick approach ("close"), then drop approach ("open")
+    # Start theta: prefer provided; else face toward pick_app; else 0
+    if s_theta_deg is None:
+        s_theta = _heading_rad(start_xy, pick_app) if pick_app is not None else 0.0
+    else:
+        s_theta = math.radians(s_theta_deg)
+
+    theta_pick = _heading_rad(pick_app, pick_xy)
+    theta_drop = _heading_rad(drop_app, drop_xy)
+
     path_points = [
-        [start_xy[0], start_xy[1], 0],
-        [pick_app[0], pick_app[1], "close"],
-        [drop_app[0], drop_app[1], "open"],
+        [start_xy[0], start_xy[1], float(s_theta), 0],
+        [pick_app[0], pick_app[1], float(theta_pick), "close"],
+        [drop_app[0], drop_app[1], float(theta_drop), "open"],
     ]
 
     _upsert_robot_path(path_json, int(robot_id), path_points)
     log(f"[save] {path_json} updated for id={robot_id}")
 
     return "Pick & drop path generation successful."
+
+
 
 
 # ---------- Quick tests ----------
@@ -389,21 +424,21 @@ if __name__ == "__main__":
     PATH_JSON = "Targets/paths.json"
 
     # 1) trace_targets test
-    # try:
-    #     print("=== trace_targets test ===")
-    #     msg = trace_targets(
-    #         input_target_list=[(1331, 379), (148, 265)],
-    #         robot_id=TEST_ROBOT_ID,
-    #         data_folder="Data",
-    #         spacing=40,
-    #         delay=5000,
-    #         offset=100,
-    #         path_json=PATH_JSON,
-    #         verbose=True,
-    #     )
-    #     print("trace_targets:", msg)
-    # except Exception as e:
-    #     print("[test trace_targets] error:", e)
+    try:
+        print("=== trace_targets test ===")
+        msg = trace_targets(
+            input_target_list=[(1331, 379), (148, 265)],
+            robot_id=1,
+            data_folder="Data",
+            spacing=40,
+            delay=5000,
+            offset=100,
+            path_json=PATH_JSON,
+            verbose=True,
+        )
+        print("trace_targets:", msg)
+    except Exception as e:
+        print("[test trace_targets] error:", e)
 
     # 2) pick_and_drop test
     try:

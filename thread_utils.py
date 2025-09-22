@@ -7,11 +7,30 @@ from Functions.Library.Agent.gemini import call_gemini_agent
 from controller import exec_bot_with_thread
 from motion import move_robot
 
-def set_preview_text(text_box, text: str):
-    text_box.configure(state="normal")
-    text_box.delete("1.0", ctk.END)      # ← use 1.0
-    text_box.insert("1.0", text)         # ← use 1.0
-    text_box.configure(state="disabled")
+def set_preview_text(text_box, text):
+    # 1) make sure we're passing a single string
+    try:
+        s = text if isinstance(text, str) else str(text)
+    except Exception:
+        import traceback
+        s = "Error rendering preview:\n" + traceback.format_exc()
+
+    # 2) toggle state so we can write
+    try:
+        prev_state = text_box.cget("state")
+    except Exception:
+        prev_state = "normal"
+
+    try:
+        text_box.configure(state="normal")
+        text_box.delete("1.0", ctk.END)
+        text_box.insert("1.0", s)   # exactly one 'chars' argument
+    finally:
+        try:
+            text_box.configure(state=prev_state if prev_state else "disabled")
+        except Exception:
+            pass
+
 
 def run_in_thread(callback, on_start=None, on_complete=None):
     """
@@ -54,13 +73,13 @@ def callibrate_task(app):
     return True
 
 def run_task(app, text_box, user_prompt, agent_name):
-    # if (callibrate_task(app) == True):
-    #     text_out = call_gemini_agent(user_prompt, agent_name)
-    #     text_box.after(0, lambda: set_preview_text(text_box=text_box, text=text_out))
-    # else:
-    #     return
-    text_out = call_gemini_agent(user_prompt, agent_name)
+    try:
+        text_out = call_gemini_agent(user_prompt, agent_name)
+    except Exception as e:
+        import traceback
+        text_out = f"Error calling Gemini:\n{e}\n\n{traceback.format_exc()}"
     text_box.after(0, lambda: set_preview_text(text_box=text_box, text=text_out))
+
 
 def _reset_execute_ui(app, execute_btn):
     """

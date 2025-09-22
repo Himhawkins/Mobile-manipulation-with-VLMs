@@ -1,13 +1,13 @@
 [
   {
     "name": "trace_targets",
-    "description": "Plans minimal waypoints to each target using A* with obstacle inflation and an offset fallback, then saves/updates a SIMPLE JSON that only contains the robot id and its path. Saved shape:\n{\n  \"robots\": [\n    {\n      \"id\": 782,\n      \"path\": [[sx, sy, 0], [x1, y1, d1], [x2, y2, d2], ...]\n    }\n  ]\n}\n- The first triple in `path` is always the robot start with delay=0.\n- If an entry for `id` already exists, it is replaced; otherwise appended.\n\nReturns:\n- \"Robot not found.\" if `robot_id` is not present in Data/robot_pos.txt.\n- \"Path generation successful.\" after saving the JSON.\n\nExample Usage: `trace_targets(input_target_list=[[50,50],[150,150]], robot_id=782, spacing=50, delay=1000, offset=120, path_json='Targets/paths.json')`",
+    "description": "Plans minimal waypoints to each target using A* with obstacle inflation and an offset fallback, then saves/updates a SIMPLE JSON that only contains the robot id and its path. Saved shape:\n{\n  \"robots\": [\n    {\n      \"id\": 782,\n      \"path\": [[sx, sy, 0], [x1, y1, d1], [x2, y2, d2], ...]\n    }\n  ]\n}\n- The first triple in `path` is always the robot start with delay=0.\n- If an entry for `id` already exists, it is replaced; otherwise appended.\n\nReturns:\n- \"Robot not found.\" if `robot_id` is not present in Data/robot_pos.txt.\n- \"Path generation successful.\" after saving the JSON.\n\nExample Usage: `trace_targets(input_target_list=[[50,50],[150,150]], robot_id=782, spacing=50, delay=\"[1000,2000]\", offset=120, path_json='Targets/paths.json')`",
     "parameters": {
       "type": "OBJECT",
       "properties": {
         "input_target_list": {
           "type": "ARRAY",
-          "description": "Required. List of (x,y) target coordinates. Provide as a list of lists or tuples, e.g., [[50, 50], [150, 150]].",
+          "description": "Required. List of (x,y) target coordinates. Provide as a list of lists, e.g., [[50, 50], [150, 150]].",
           "items": {
             "type": "ARRAY",
             "items": { "type": "INTEGER" }
@@ -26,14 +26,8 @@
           "description": "Dilation spacing (pixels) around obstacles for planning safety. Default: 50."
         },
         "delay": {
-          "description": "Delay in milliseconds applied to EACH accepted target point. Either a single integer or an array of integers (one per target).",
-          "oneOf": [
-            { "type": "INTEGER" },
-            {
-              "type": "ARRAY",
-              "items": { "type": "INTEGER" }
-            }
-          ]
+          "type": "STRING",
+          "description": "Delay in milliseconds applied to each accepted target point. Accepts a single integer (e.g., '5000') or a JSON-style list string (e.g., '[1000,2000]')."
         },
         "offset": {
           "type": "INTEGER",
