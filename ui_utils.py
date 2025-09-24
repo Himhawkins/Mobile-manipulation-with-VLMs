@@ -311,46 +311,108 @@ def get_overlay_frame(
         return overlay
 
 
+# def draw_path_on_frame(
+#     frame,
+#     json_path="Data/trace_paths.json",   # trace file with: {"robots":[{"id": <int>, "points": [[x,y], ...]}]}
+#     colors=None,
+#     dot_gap_px=12,          # spacing between dots
+#     dot_radius=2            # radius of each dot
+# ):
+#     """
+#     Visualize the robot trace from Data/trace_targets.json.
+
+#     Expected JSON:
+#     {
+#       "robots": [
+#         { "id": <int>, "points": [[x, y], [x2, y2], ...] },
+#         ...
+#       ]
+#     }
+#     """
+#     if not os.path.exists(json_path):
+#         print(f"[draw_path_on_frame] JSON not found: {json_path}")
+#         return frame
+
+#     try:
+#         with open(json_path, "r", encoding="utf-8") as f:
+#             data = json.load(f)
+#     except Exception as e:
+#         print(f"[draw_path_on_frame] Failed to read JSON: {e}")
+#         return frame
+
+#     robots = data.get("robots", [])
+#     if not isinstance(robots, list) or not robots:
+#         return frame
+
+#     # Default color palette (BGR)
+#     if colors is None:
+#         colors = [
+#             (0, 255, 0),     # green
+#             (0, 0, 255),     # red
+#             (255, 0, 0),     # blue
+#             (255, 255, 0),   # cyan
+#             (255, 0, 255),   # magenta
+#             (0, 255, 255),   # yellow
+#             (0, 165, 255),   # orange
+#             (128, 0, 128),   # purple-ish
+#         ]
+
+#     gap = max(2, int(dot_gap_px))
+#     r = max(1, int(dot_radius))
+
+#     def _draw_dotted_polyline(pts, color):
+#         if len(pts) < 2:
+#             return
+#         carry = 0.0
+#         for i in range(1, len(pts)):
+#             (x0, y0) = pts[i - 1]
+#             (x1, y1) = pts[i]
+#             dx, dy = (x1 - x0), (y1 - y0)
+#             seg_len = math.hypot(dx, dy)
+#             if seg_len <= 1e-6:
+#                 continue
+
+#             dist_along = carry
+#             while dist_along <= seg_len:
+#                 t = dist_along / seg_len
+#                 xi = int(round(x0 + t * dx))
+#                 yi = int(round(y0 + t * dy))
+#                 cv2.circle(frame, (xi, yi), r, color, -1)
+#                 dist_along += gap
+
+#             carry = dist_along - seg_len if dist_along > seg_len else 0.0
+
+#     for idx, entry in enumerate(robots):
+#         pts_raw = entry.get("points", [])
+#         if not isinstance(pts_raw, list) or len(pts_raw) < 2:
+#             continue
+
+#         pts = []
+#         for item in pts_raw:
+#             if isinstance(item, (list, tuple)) and len(item) >= 2:
+#                 try:
+#                     x = int(item[0]); y = int(item[1])
+#                     pts.append((x, y))
+#                 except Exception:
+#                     continue
+
+#         if len(pts) >= 2:
+#             color = colors[idx % len(colors)]
+#             _draw_dotted_polyline(pts, color)
+
+#     return frame
+
 def draw_path_on_frame(
     frame,
-    json_path="Targets/paths.json",
-    # Colors to cycle through for different robots (BGR, OpenCV order)
+    json_path="Data/astar_segments.json",
     colors=None,
-    # Dotted line controls
-    dot_gap_px=12,           # center-to-center spacing of dots
-    dot_radius=2,            # radius of each dot
-    # Markers
-    show_checkpoints=True,   # mark delay>0 and action points ("open"/"close")
-    checkpoint_color=(0, 255, 255),
-    checkpoint_radius=4,
-    action_open_color=(0, 255, 0),   # green
-    action_close_color=(0, 0, 255),  # red
-    action_radius=5,
-    annotate_delay=False,    # if True, also label numbers/"open"/"close"
-    font=cv2.FONT_HERSHEY_SIMPLEX,
-    font_scale=0.4,
-    text_thickness=1,
+    dot_gap_px=12,
+    dot_radius=2,
+    show_only_latest=True,   # <- NEW
 ):
     """
-    Draw dotted polylines for ALL robots listed in paths.json:
-
-    {
-      "robots": [
-        { "id": <int>, "path": [[x, y, tag], ...] },
-        ...
-      ]
-    }
-
-    The third element 'tag' can be:
-      - a number (delay in ms), e.g. 5000
-      - a string action "open" or "close"
-
-    - Each robot's path is drawn as a dotted line with evenly spaced filled circles.
-    - Dots are placed using 'dot_gap_px' across all segments.
-    - If show_checkpoints is True:
-        * numeric tag > 0 -> yellow checkpoint marker (+ optional numeric label)
-        * "open" -> green action marker (+ optional text)
-        * "close" -> red action marker (+ optional text)
+    Visualize A* segments (or legacy trace). When show_only_latest=True,
+    only the most recent segment per robot is drawn so previous paths disappear.
     """
     if not os.path.exists(json_path):
         print(f"[draw_path_on_frame] JSON not found: {json_path}")
@@ -364,28 +426,24 @@ def draw_path_on_frame(
         return frame
 
     robots = data.get("robots", [])
-    if not isinstance(robots, list) or len(robots) == 0:
-        return frame  # nothing to draw
+    if not isinstance(robots, list) or not robots:
+        return frame
 
     # Default color palette (BGR)
     if colors is None:
         colors = [
-            (0, 255, 0),     # green
-            (0, 0, 255),     # red
-            (255, 0, 0),     # blue
-            (255, 255, 0),   # cyan
-            (255, 0, 255),   # magenta
-            (0, 255, 255),   # yellow
-            (0, 165, 255),   # orange
-            (128, 0, 128),   # purple-ish
+            (0, 255, 0), (0, 0, 255), (255, 0, 0), (255, 255, 0),
+            (255, 0, 255), (0, 255, 255), (0, 165, 255), (128, 0, 128),
         ]
 
     gap = max(2, int(dot_gap_px))
     r = max(1, int(dot_radius))
-    act_r = max(2, int(action_radius))
+    goal_radius = max(2, int(dot_radius + 1))
+    escape_color = (0, 165, 255)  # orange for escape segments
 
     def _draw_dotted_polyline(pts, color):
-        """Draw dots across all segments with even spacing."""
+        if len(pts) < 2:
+            return
         carry = 0.0
         for i in range(1, len(pts)):
             (x0, y0) = pts[i - 1]
@@ -394,7 +452,6 @@ def draw_path_on_frame(
             seg_len = math.hypot(dx, dy)
             if seg_len <= 1e-6:
                 continue
-
             dist_along = carry
             while dist_along <= seg_len:
                 t = dist_along / seg_len
@@ -402,86 +459,71 @@ def draw_path_on_frame(
                 yi = int(round(y0 + t * dy))
                 cv2.circle(frame, (xi, yi), r, color, -1)
                 dist_along += gap
-
             carry = dist_along - seg_len if dist_along > seg_len else 0.0
 
-    def _parse_tag(raw):
-        """
-        Return ('delay', value) for numeric delays,
-               ('action', 'open'|'close') for string actions,
-               or (None, None) if not present/invalid.
-        """
-        if raw is None:
-            return (None, None)
-        # Try numeric first
-        try:
-            val = float(raw)
-            return ("delay", val)
-        except Exception:
-            pass
-        # Then action string
-        if isinstance(raw, str):
-            tag = raw.strip().lower()
-            if tag in ("open", "close"):
-                return ("action", tag)
-        return (None, None)
-
-    # Process each robot path
     for idx, entry in enumerate(robots):
-        raw_path = entry.get("path", [])
-        if not isinstance(raw_path, list) or len(raw_path) < 2:
-            continue  # need at least two points
+        base_color = colors[idx % len(colors)]
 
-        # Parse points for this robot
-        pts, tags = [], []  # tags: list of ('delay', value) or ('action', 'open'|'close') or (None, None)
-        for item in raw_path:
-            if not (isinstance(item, (list, tuple)) and len(item) >= 2):
+        # --- A* segments mode ---
+        if isinstance(entry, dict) and isinstance(entry.get("segments"), list):
+            segs = entry["segments"]
+            if not segs:
                 continue
-            try:
-                x = int(item[0]); y = int(item[1])
-            except Exception:
+            segments_to_draw = [segs[-1]] if show_only_latest else segs  # <- only latest if flag
+
+            for seg in segments_to_draw:
+                pts_raw = seg.get("path", [])
+                if not isinstance(pts_raw, list) or len(pts_raw) < 2:
+                    continue
+
+                pts = []
+                for item in pts_raw:
+                    if isinstance(item, (list, tuple)) and len(item) >= 2:
+                        try:
+                            x = int(item[0]); y = int(item[1])
+                            pts.append((x, y))
+                        except Exception:
+                            continue
+                if len(pts) < 2:
+                    continue
+
+                seg_type = str(seg.get("type", "normal")).lower()
+                color = escape_color if seg_type == "escape" else base_color
+                _draw_dotted_polyline(pts, color)
+
+                # mark goal
+                goal = seg.get("goal", None)
+                if isinstance(goal, (list, tuple)) and len(goal) >= 2:
+                    try:
+                        gx, gy = int(goal[0]), int(goal[1])
+                    except Exception:
+                        gx, gy = pts[-1]
+                else:
+                    gx, gy = pts[-1]
+                cv2.circle(frame, (gx, gy), goal_radius, color, 2)
+
+        # --- Legacy trace mode ---
+        elif isinstance(entry, dict) and isinstance(entry.get("points"), list):
+            pts_raw = entry.get("points", [])
+            if not isinstance(pts_raw, list) or len(pts_raw) < 2:
                 continue
-            kind, val = _parse_tag(item[2] if len(item) >= 3 else None)
-            pts.append((x, y))
-            tags.append((kind, val))
 
-        if len(pts) < 2:
-            continue
+            if show_only_latest:
+                # Show only last segment between last two points
+                pts_raw = pts_raw[-2:]
 
-        color = colors[idx % len(colors)]
-        _draw_dotted_polyline(pts, color)
-
-        if not show_checkpoints:
-            continue
-
-        # Draw markers for this robot: delay>0 or actions
-        for (x, y), (kind, val) in zip(pts, tags):
-            if kind == "delay":
-                try:
-                    if float(val) > 0:
-                        cv2.circle(frame, (x, y), checkpoint_radius, checkpoint_color, -1)
-                        if annotate_delay:
-                            cv2.putText(
-                                frame, f"{float(val):g}", (x + 5, y - 5),
-                                font, font_scale, checkpoint_color, text_thickness, cv2.LINE_AA
-                            )
-                except Exception:
-                    pass
-            elif kind == "action":
-                if val == "open":
-                    cv2.circle(frame, (x, y), act_r, action_open_color, 2)  # hollow circle
-                    if annotate_delay:
-                        cv2.putText(
-                            frame, "open", (x + 5, y - 5),
-                            font, font_scale, action_open_color, text_thickness, cv2.LINE_AA
-                        )
-                elif val == "close":
-                    cv2.circle(frame, (x, y), act_r, action_close_color, -1)  # filled
-                    if annotate_delay:
-                        cv2.putText(
-                            frame, "close", (x + 5, y - 5),
-                            font, font_scale, action_close_color, text_thickness, cv2.LINE_AA
-                        )
+            pts = []
+            for item in pts_raw:
+                if isinstance(item, (list, tuple)) and len(item) >= 2:
+                    try:
+                        x = int(item[0]); y = int(item[1])
+                        pts.append((x, y))
+                    except Exception:
+                        continue
+            if len(pts) >= 2:
+                color = base_color
+                _draw_dotted_polyline(pts, color)
+                cv2.circle(frame, pts[-1], goal_radius, color, 2)
 
     return frame
 

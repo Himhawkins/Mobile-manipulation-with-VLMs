@@ -44,6 +44,17 @@ def _ensure_txt(path, default_lines):
                 f.write(f"{line}\n")
         _dbg(f"Initialized file: {path}")
 
+# --- Trace file utils ---------------------------------------------------------
+def _clear_trace_file(path: str):
+    """Reset the trace file so old traces don't persist across runs."""
+    try:
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "w") as f:
+            json.dump({"robots": []}, f)
+        _dbg(f"Cleared trace file: {path}")
+    except Exception as e:
+        print(f"[WARN] Could not clear trace file '{path}': {e}")
+
 def _robot_id_exists(pose_file: str, robot_id: int) -> bool:
     try:
         with open(pose_file, "r") as f:
@@ -75,6 +86,132 @@ def _load_paths_json(json_path: str) -> dict:
         pass
     return {"robots": []}
 
+# --- NEW: trace JSON helpers -----------------------------------------------
+def _load_trace_json(json_path: str) -> dict:
+    """
+    Structure:
+    { "robots": [ { "id": <int>, "points": [[x,y], ...] }, ... ] }
+    """
+    os.makedirs(os.path.dirname(json_path), exist_ok=True)
+    if not os.path.exists(json_path):
+        return {"robots": []}
+    try:
+        with open(json_path, "r") as f:
+            data = json.load(f)
+            if isinstance(data, dict) and "robots" in data and isinstance(data["robots"], list):
+                return data
+    except Exception:
+        pass
+    return {"robots": []}
+
+def _trace_append_point(json_path: str, robot_id: int, x: float, y: float):
+    data = _load_trace_json(json_path)
+    rid = int(robot_id)
+    # find or create entry
+    entry = None
+    for r in data["robots"]:
+        try:
+            if int(r.get("id", -1)) == rid:
+                entry = r
+                break
+        except Exception:
+            continue
+    if entry is None:
+        entry = {"id": rid, "points": []}
+        data["robots"].append(entry)
+
+    # dedup consecutive duplicates
+    if entry["points"]:
+        last = entry["points"][-1]
+        if int(round(last[0])) == int(round(x)) and int(round(last[1])) == int(round(y)):
+            return
+
+    entry["points"].append([int(round(x)), int(round(y))])
+    try:
+        with open(json_path, "w") as f:
+            json.dump(data, f)
+    except Exception as e:
+        print(f"[WARN] trace write failed: {e}")
+
+# --- A* segment dump helpers --------------------------------------------------
+def _astar_dump_clear(json_path: str, robot_id: int):
+    """Remove all segments for this robot from the dump file."""
+    try:
+        os.makedirs(os.path.dirname(json_path), exist_ok=True)
+        if not os.path.exists(json_path):
+            with open(json_path, "w") as f:
+                json.dump({"robots": []}, f)
+            return
+
+        with open(json_path, "r") as f:
+            data = json.load(f)
+        if not isinstance(data, dict) or "robots" not in data:
+            data = {"robots": []}
+
+        rid = int(robot_id)
+        data["robots"] = [r for r in data["robots"] if int(r.get("id", -1)) != rid]
+
+        with open(json_path, "w") as f:
+            json.dump(data, f)
+    except Exception as e:
+        print(f"[WARN] astar_dump_clear failed: {e}")
+
+
+def _astar_dump_append(json_path: str, robot_id: int, goal_xy, path_pts, *, seg_type="normal"):
+    """
+    Append one planned segment:
+      goal_xy: (gx, gy)
+      path_pts: [(x,y),...]
+      seg_type: "normal" or "escape"
+    File layout:
+    {
+      "robots":[
+        {"id": 2, "segments":[
+          {"ts": 1712345678.123, "type":"normal", "goal":[gx,gy], "path":[[x,y],...]}
+        ]},
+        ...
+      ]
+    }
+    """
+    try:
+        os.makedirs(os.path.dirname(json_path), exist_ok=True)
+        data = {"robots": []}
+        if os.path.exists(json_path):
+            try:
+                with open(json_path, "r") as f:
+                    data = json.load(f)
+            except Exception:
+                pass
+        if not isinstance(data, dict):
+            data = {"robots": []}
+        if "robots" not in data or not isinstance(data["robots"], list):
+            data["robots"] = []
+
+        rid = int(robot_id)
+        entry = None
+        for r in data["robots"]:
+            try:
+                if int(r.get("id", -1)) == rid:
+                    entry = r
+                    break
+            except Exception:
+                continue
+        if entry is None:
+            entry = {"id": rid, "segments": []}
+            data["robots"].append(entry)
+
+        seg = {
+            "type": seg_type,
+            "goal": [int(goal_xy[0]), int(goal_xy[1])],
+            "path": [[int(p[0]), int(p[1])] for p in path_pts],
+        }
+        entry.setdefault("segments", []).append(seg)
+
+        with open(json_path, "w") as f:
+            json.dump(data, f)
+    except Exception as e:
+        print(f"[WARN] astar_dump_append failed: {e}")
+
 def _get_robot_path_from_json(json_path: str, robot_id: int):
     """
     Returns list of (x, y, theta_rad, action) for robot_id from json_path,
@@ -85,7 +222,7 @@ def _get_robot_path_from_json(json_path: str, robot_id: int):
       [x, y]                                  -> theta=0.0, action=0
       [x, y, theta]                           -> theta=float (rad), action=0
       [x, y, theta, action]                   -> full spec
-      [x, y, action]  (legacy 3-tuple)        -> theta=0.0, action=parsed
+      [x, y, theta|action]  (legacy 3-tuple)  -> if str=action; else theta float, action=0
     """
     data = _load_paths_json(json_path)
     for entry in data.get("robots", []):
@@ -529,7 +666,7 @@ def _nearest_free(mask, x, y, r_max=50):
         y0, y1 = max(0, y - r), min(H - 1, y + r)
         for xx in range(x0, x1 + 1):
             if mask[y0, xx] == 0: return (xx, y0)
-            if mask[y1, xx] == 0: return (xx, yy)
+            if mask[y1, xx] == 0: return (xx, y1)  # FIXED: y1 (not yy)
         for yy in range(y0 + 1, y1):
             if mask[yy, x0] == 0: return (x0, yy)
             if mask[yy, x1] == 0: return (x1, yy)
@@ -633,9 +770,13 @@ class PIDController:
         nearest_free_radius=50, linecheck_margin_px=1,
         clearance_boost_px=0,
         robot_id=None, robot_padding=0,
-        gripper_queue=None,                 # NEW (for thread mode)
-        gripper_sender=None,                # NEW (for non-thread, one-shot)
-        gripper_action_pause_s=0.4,         # NEW optional pause after action
+        gripper_queue=None, gripper_sender=None, gripper_action_pause_s=0.4,         # NEW
+        # --- NEW: trace options ---
+        trace_json_path: str = str(Path("Data") / "trace_paths.json"),
+        trace_stride_px: float = 2.0,
+        trace_flush_every: int = 1,
+        astar_dump_path: str = str(Path("Data") / "astar_segments.json"),
+        clear_astar_dump_on_start: bool = True
     ):
         self.iface = iface
         # PID
@@ -683,12 +824,43 @@ class PIDController:
         self.gripper_sender = gripper_sender
         self.gripper_action_pause_s = float(gripper_action_pause_s)
 
+        # NEW: trace logging
+        self.trace_json_path = str(trace_json_path)
+        self.trace_stride_px = float(trace_stride_px)
+        self.trace_flush_every = int(max(1, trace_flush_every))
+        self._trace_last_xy = None
+        self._trace_since_flush = 0
+        self._robot_id_for_trace = int(robot_id) if robot_id is not None else 0
+
         self.cache.rebuild_if_needed()
+
+        self.astar_dump_path = str(astar_dump_path)
+        self._robot_id_for_dump = int(robot_id) if robot_id is not None else 0
+        if clear_astar_dump_on_start:
+            _astar_dump_clear(self.astar_dump_path, self._robot_id_for_dump)
 
     @staticmethod
     def normalize(angle): return math.atan2(math.sin(angle), math.cos(angle))
     @staticmethod
     def _deg(rad): return math.degrees(rad)
+
+    # --- NEW: maybe log current point to trace file
+    def _maybe_log_trace(self, x: float, y: float):
+        try:
+            cur = (float(x), float(y))
+            if self._trace_last_xy is None:
+                self._trace_last_xy = cur
+                _trace_append_point(self.trace_json_path, self._robot_id_for_trace, x, y)
+                self._trace_since_flush = 0
+                return
+            dx = cur[0] - self._trace_last_xy[0]
+            dy = cur[1] - self._trace_last_xy[1]
+            if (dx*dx + dy*dy) >= (self.trace_stride_px * self.trace_stride_px):
+                self._trace_last_xy = cur
+                _trace_append_point(self.trace_json_path, self._robot_id_for_trace, x, y)
+                self._trace_since_flush += 1
+        except Exception as e:
+            print(f"[WARN] trace log error: {e}")
 
     def _direction_label(self, v_cmd: float, ang_cmd: float) -> str:
         v_mag = abs(v_cmd)
@@ -799,6 +971,12 @@ class PIDController:
                 self._seg_index = 0
                 self._seg_goal = goal_tuple
                 _dbg(f"NEW_PLAN(ESCAPE): len={len(path)}", self._tick)
+                # NEW: dump escape segment
+                try:
+                    _astar_dump_append(self.astar_dump_path, self._robot_id_for_dump,
+                                    goal_tuple, self._seg_path, seg_type="escape")
+                except Exception as e:
+                    print(f"[WARN] astar escape dump failed: {e}")
             return True
 
         # --- Outside inflated area: normal logic ---
@@ -839,6 +1017,12 @@ class PIDController:
             self._seg_index = 0
             self._seg_goal = goal_tuple
             _dbg(f"NEW_PLAN: len={len(path)} to goal={goal_tuple}", self._tick)
+            # NEW: dump normal segment
+            try:
+                _astar_dump_append(self.astar_dump_path, self._robot_id_for_dump,
+                                goal_tuple, self._seg_path, seg_type="normal")
+            except Exception as e:
+                print(f"[WARN] astar dump failed: {e}")
         return True
 
     # ---- Main loop ----
@@ -855,6 +1039,10 @@ class PIDController:
             dt = max(1e-3, now - self.prev_time); self.prev_time = now
 
             x, y, theta = self.iface.read_pos()
+
+            # --- NEW: record current position into trace (throttled by stride) ---
+            self._maybe_log_trace(x, y)
+
             cur_pose = (round(x,1), round(y,1))
             if self._last_pose == cur_pose:
                 self._pose_still_cnt += 1
@@ -873,6 +1061,8 @@ class PIDController:
                 while not (stop_event and stop_event.is_set()):
                     time.sleep(self.replan_wait_backoff_s)
                     x, y, theta = self.iface.read_pos()
+                    # --- NEW: also trace during wait ---
+                    self._maybe_log_trace(x, y)
                     if self._ensure_segment_path((x, y), (goal_x, goal_y)):
                         _dbg("PLAN_AVAILABLE: resuming motion.", self._tick)
                         break
@@ -913,6 +1103,9 @@ class PIDController:
 
                         # re-read current pose to get fresh theta before aligning
                         x, y, theta = self.iface.read_pos()
+                        # ensure trace logs the exact arrival point
+                        self._maybe_log_trace(x, y)
+
                         # goal_theta may come from legacy zeros; ensure float
                         try:
                             gth = float(goal_theta)
@@ -971,6 +1164,9 @@ class PIDController:
                             except Exception:
                                 delay_s = 0.0
                             self._pause_at_checkpoint(delay_s, stop_event=stop_event)
+
+                        # --- NEW: ensure the exact target point is recorded ---
+                        self._maybe_log_trace(goal_x, goal_y)
 
                         # move to next target
                         idx += 1
@@ -1048,6 +1244,10 @@ def run_controller(
     stop_event=None,
     robot_id=None, robot_padding=0,
     gripper_queue=None, gripper_sender=None, gripper_action_pause_s=0.4,  # NEW
+    # --- NEW: trace options ---
+    trace_json_path: str = str(Path("Data") / "trace_paths.json"),
+    trace_stride_px: float = 6.0,
+    trace_flush_every: int = 1,
 ):
     iface = FileInterface(target_file, pose_file, command_file, error_file, robot_id=robot_id)
     controller = PIDController(
@@ -1063,6 +1263,12 @@ def run_controller(
         robot_id=robot_id, robot_padding=robot_padding,
         gripper_queue=gripper_queue, gripper_sender=gripper_sender,
         gripper_action_pause_s=gripper_action_pause_s,
+        # NEW
+        trace_json_path=trace_json_path,
+        trace_stride_px=trace_stride_px,
+        trace_flush_every=trace_flush_every,
+        astar_dump_path=str(Path("Data") / "astar_segments.json"),
+        clear_astar_dump_on_start=True,
     )
 
     # --- NEW: pre-open gripper before motion starts ---
@@ -1107,7 +1313,13 @@ def exec_bot(
         target_file, pose_file, command_file, error_file,
         robot_id=robot_id, robot_padding=robot_padding,
         gripper_sender=_sender,
+        # NEW (optional – explicit for clarity)
+        trace_json_path=str(Path("Data") / "trace_paths.json"),
+        trace_stride_px=6.0,
+        trace_flush_every=1,
     )
+    trace_path = str(Path("Data") / "trace_paths.json")
+    _clear_trace_file(trace_path)
     return "Done executing"
 
 def exec_bot_with_thread(stop_event, robot_id=782, robot_padding=30):
@@ -1126,9 +1338,13 @@ def exec_bot_with_thread(stop_event, robot_id=782, robot_padding=30):
         target_file, pose_file, command_file, error_file,
         stop_event=stop_event,
         robot_id=robot_id, robot_padding=robot_padding,
-        # In this variant the serial thread might be started elsewhere;
-        # pass a gripper_queue via run_controller if you have one.
+        # NEW (optional)
+        trace_json_path=str(Path("Data") / "trace_paths.json"),
+        trace_stride_px=6.0,
+        trace_flush_every=1,
     )
+    trace_path = str(Path("Data") / "trace_paths.json")
+    _clear_trace_file(trace_path)
     return "Done executing"
 
 def exec_robot_create_thread(
@@ -1190,7 +1406,13 @@ def exec_robot_create_thread(
                     stop_event=stop_event,
                     robot_id=robot_id, robot_padding=robot_padding,
                     gripper_queue=grip_q,  # NEW
+                    # NEW (optional)
+                    trace_json_path=str(Path("Data") / "trace_paths.json"),
+                    trace_stride_px=6.0,
+                    trace_flush_every=1,
                 )
+                trace_path = str(Path("Data") / "trace_paths.json")
+                _clear_trace_file(trace_path)
             finally:
                 with _robot_threads_lock:
                     info = _robot_threads.get(robot_id)
@@ -1241,8 +1463,11 @@ def stop_robot_thread(robot_id: int, join_timeout: float = 5.0):
 
     if still_alive:
         return f"Stop requested; robot {robot_id} is still stopping"
+    
+    trace_path = str(Path("Data") / "trace_paths.json")
+    _clear_trace_file(trace_path)
     return f"Stopped thread for robot {robot_id}"
 
 if __name__ == "__main__":
-    # Example: run for robot id 1 and treat other robots as 30 px obstacles
+    # Example: run for robot id 2 and treat other robots as 30 px obstacles
     print(exec_bot(robot_id=2, robot_padding=30))
