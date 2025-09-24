@@ -210,6 +210,7 @@ def load_functions_description(function_list):
                 
                 if isinstance(func_obj, dict) and 'name' in func_obj:
                     func_name = func_obj['name']
+                    func_obj['description']="Parent Library: "+library+ " "+ func_obj['description']
                     # # If this is a function we are looking for:
                     print(func_name)
                     # print("************************************")

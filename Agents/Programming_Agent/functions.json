@@ -4,7 +4,15 @@
         "name": "trace_targets"
     },
     {
+        "library": "detection",
+        "name": "detect_objects"
+    },
+    {
         "library": "soft_dev",
         "name": "create_code"
+    },
+    {
+        "library": "shapes",
+        "name": "generate_circle_pattern"
     }
 ]
