@@ -212,6 +212,11 @@ def _astar_dump_append(json_path: str, robot_id: int, goal_xy, path_pts, *, seg_
     except Exception as e:
         print(f"[WARN] astar_dump_append failed: {e}")
 
+def _save_paths_json(path: str, data: dict) -> None:
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(data, f, indent=2)
+
 def _get_robot_path_from_json(json_path: str, robot_id: int):
     """
     Returns list of (x, y, theta_rad, action) for robot_id from json_path,
@@ -231,7 +236,10 @@ def _get_robot_path_from_json(json_path: str, robot_id: int):
                 continue
             items = entry.get("path", [])
             out = []
-            for t in items:
+            #for t in items: #PS ONLY1 item
+            if len(items)>0:
+                entry["path"].pop(0)
+                _save_paths_json(json_path, data) #PS SAVING UPDATE
                 if not isinstance(t, (list, tuple)) or len(t) < 2:
                     continue
                 x = int(t[0]); y = int(t[1])
@@ -1249,6 +1257,7 @@ def run_controller(
     trace_stride_px: float = 6.0,
     trace_flush_every: int = 1,
 ):
+    
     iface = FileInterface(target_file, pose_file, command_file, error_file, robot_id=robot_id)
     controller = PIDController(
         iface,
@@ -1284,6 +1293,7 @@ def run_controller(
             print(f"[gripper] failed to send pre-open: {e}")
             
     ret = controller.run(stop_event=stop_event)
+
     return ret
 
 def exec_bot(

@@ -83,7 +83,7 @@ def _upsert_robot_path(path_json: str, robot_id: int, path_points: list) -> None
     replaced = False
     for i, entry in enumerate(robots):
         if int(entry.get("id", -1)) == int(robot_id):
-            robots[i] = new_entry
+            robots[i]["path"].extend(path_points) # = new_entry
             replaced = True
             break
     if not replaced:
