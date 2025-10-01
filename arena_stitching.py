@@ -219,6 +219,8 @@ def find_robots_in_arena(settings, caps, save_path=None, append=False):
 
             for d in dets:
                 mid = d["id"]
+                if mid == 0:   # <-- ignore robot ID 0
+                    continue
                 pos_acc.setdefault(mid, []).append((d["x"], d["y"]))
                 ang_acc.setdefault(mid, []).append(d["theta"])
 

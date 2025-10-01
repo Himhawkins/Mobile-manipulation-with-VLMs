@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+
 import os
 from PIL import Image, ImageTk
 import customtkinter as ctk
@@ -24,6 +26,11 @@ class DashboardApp(ctk.CTk):
         self.grid_rowconfigure(1, weight=1)
         self.grid_rowconfigure(2, weight=0)
         self.grid_columnconfigure(0, weight=1)
+
+        # --- NEW: Command history state ---
+        self.command_history = []
+        self.history_index = 0
+        self.current_typed_text = ""
 
         # Top Section
         top_frame = ctk.CTkFrame(self)
@@ -66,7 +73,6 @@ class DashboardApp(ctk.CTk):
 
         self.preview1_txt = ctk.CTkTextbox(middle_frame, width=700, border_width=1, corner_radius=8, state="disabled")
         self.preview1_txt.grid(row=0, column=1, sticky="nsew", pady=(10,5), padx=(5,10))
-        # self.preview1_txt.grid_propagate(False)
 
         # Bottom Section
         bottom_frame = ctk.CTkFrame(self)
@@ -101,6 +107,13 @@ class DashboardApp(ctk.CTk):
             width=250
         )
         self.input_entry.grid(row=0, column=0, sticky="ew", padx=(0,5))
+        
+        # --- NEW: Bind keyboard events to the input entry ---
+        self.input_entry.bind("<Return>", self._handle_run_command)
+        self.input_entry.bind("<Up>", self._handle_history_navigate)
+        self.input_entry.bind("<Down>", self._handle_history_navigate)
+        self.input_entry.bind("<Control-a>", self._handle_select_all)
+        self.input_entry.bind("<Control-A>", self._handle_select_all) # For caps lock case
 
         self.calibrate_btn = ctk.CTkButton(
             action_frame,
@@ -117,13 +130,6 @@ class DashboardApp(ctk.CTk):
         self.run_btn.grid(row=0, column=2, padx=5)
 
         self.is_executing = False
-        self.execute_btn = ctk.CTkButton(
-            action_frame,
-            text="Execute",
-            fg_color="#7228E9",
-            command=lambda: toggle_execute(self, self.serial_var, self.execute_btn)
-        )
-        self.execute_btn.grid(row=0, column=3, padx=5)
 
         self.move_thread = None
         self.stop_event = threading.Event()
@@ -135,6 +141,53 @@ class DashboardApp(ctk.CTk):
 
         self.on_update_video()
 
+    # --- NEW: Event handlers for the input entry ---
+    def _handle_run_command(self, event):
+        """Handles the Enter key press to run a command and save it to history."""
+        command = self.input_var.get()
+        if command:
+            # Add to history if it's new or different from the last command
+            if not self.command_history or self.command_history[-1] != command:
+                self.command_history.append(command)
+            self.history_index = len(self.command_history)
+            self.current_typed_text = ""
+        
+        # Trigger the same action as clicking the "Run" button
+        self.on_mode_action("Run")
+        return "break"  # Prevents the default Enter key behavior
+
+    def _handle_history_navigate(self, event):
+        """Handles Up and Down arrow keys to navigate command history."""
+        if not self.command_history:
+            return "break"
+
+        if event.keysym == "Up":
+            if self.history_index == len(self.command_history):
+                # Save what the user is currently typing before showing history
+                self.current_typed_text = self.input_var.get()
+            
+            if self.history_index > 0:
+                self.history_index -= 1
+                self.input_var.set(self.command_history[self.history_index])
+                self.input_entry.icursor("end") # Move cursor to the end
+        
+        elif event.keysym == "Down":
+            if self.history_index < len(self.command_history) - 1:
+                self.history_index += 1
+                self.input_var.set(self.command_history[self.history_index])
+                self.input_entry.icursor("end")
+            elif self.history_index == len(self.command_history) - 1:
+                # Reached the bottom of history, restore the user's typed text
+                self.history_index += 1
+                self.input_var.set(self.current_typed_text)
+                self.input_entry.icursor("end")
+
+        return "break"
+
+    def _handle_select_all(self, event):
+        """Handles Ctrl+A to select all text in the entry."""
+        self.input_entry.select_range(0, 'end')
+        return "break"
 
     def on_update_video(self):        
         if not self.caps:
@@ -147,7 +200,6 @@ class DashboardApp(ctk.CTk):
             return self.after(16, self.on_update_video)
         
         self.settings = get_app_settings()
-        aruco_id = int(self.settings.get("aruco_id", "782"))
         
         for cap in self.caps.values():
             if not cap.isOpened():
@@ -162,12 +214,6 @@ class DashboardApp(ctk.CTk):
                                   ref_path="Data/frame_img.png",
                                   robot_path="Data/robot_pos.txt",
                                   robot_padding=20)
-        # if pose:
-        #     final_x, final_y, final_theta = pose
-        #     # d_frame = draw_robot_pose(stitched, final_x, final_y, final_theta)
-        #     d_frame = draw_robot_pose_with_sprite(frame=stitched, x=final_x, y=final_y, theta=final_theta, sprite="Data/robot_sprite.png", sprite_scale=0.3)
-        # else:
-            # d_frame = stitched
         
         d_frame = draw_robot_pose(stitched)
 
@@ -204,7 +250,6 @@ class DashboardApp(ctk.CTk):
 
         self.wait_window(self.arena_popup)
 
-        # popup closed -> reload settings & reopen cameras
         self.arena_settings = load_arena_settings()
         self.caps = open_all_cameras(self.arena_settings)
 

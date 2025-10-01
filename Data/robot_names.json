@@ -1,0 +1,20 @@
+{
+  "robots": [
+    {
+      "id": 2,
+      "name": "Red"
+    },
+    {
+      "id": 1,
+      "name": "Beta"
+    },
+    {
+      "id": 3,
+      "name": "Purple"
+    },
+    {
+      "id": 4,
+      "name": "Orange"
+    }
+  ]
+}

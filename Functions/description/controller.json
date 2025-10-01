@@ -1,7 +1,7 @@
 [
   {
     "name": "exec_robot_create_thread",
-    "description": "Spawn a background controller thread AND a serial-sender thread for the given robot_id. Uses Targets/paths.json (per-id paths) and Data/robot_pos.txt (poses). Returns one of: \"Selected ID doesn't exist\", \"Path for specific robot doesn't exist. Generate path first\", \"Thread already running for robot <id>\", \"Started thread for robot <id>\", or \"Failed to start serial thread for robot <id>: <error>\".",
+    "description": "Spawns a background controller thread for the given robot_id. This thread reads from Targets/paths.json and Data/robot_pos.txt, and writes commands to Data/command.json. A separate process is expected to read command.json and control the hardware. Returns one of: \"Selected ID doesn't exist\", \"Path for specific robot doesn't exist. Generate path first\", \"Thread already running for robot <id>\", or \"Started controller thread for robot <id>\".",
     "parameters": {
       "type": "OBJECT",
       "properties": {
@@ -12,43 +12,31 @@
         "robot_padding": {
           "type": "INTEGER",
           "description": "Pixels to treat OTHER robots as circular obstacles during planning. Default: 30."
-        },
-        "serial_port": {
-          "type": "STRING",
-          "description": "Serial device for the robot’s motor/gripper bridge. Default: \"/dev/ttyACM0\"."
-        },
-        "baud_rate": {
-          "type": "INTEGER",
-          "description": "Baud rate for the serial bridge. Default: 115200."
-        },
-        "command_file": {
-          "type": "STRING",
-          "description": "Path of the file the controller writes wheel commands to; the serial thread streams this file. Default: \"Data/command.txt\"."
-        },
-        "send_interval_s": {
-          "type": "NUMBER",
-          "description": "Interval (seconds) between serial sends from the command file. Default: 0.1."
         }
       },
-      "required": ["robot_id"]
+      "required": [
+        "robot_id"
+      ]
     }
   },
   {
     "name": "stop_robot_thread",
-    "description": "Signals the running controller+serial threads for the given robot_id to stop and waits briefly. Returns one of: \"No running thread for robot <id>\", \"Stop requested; robot <id> is still stopping\", or \"Stopped thread for robot <id>\".",
+    "description": "Signals the running controller thread for the given robot_id to stop and waits briefly. Returns one of: \"No running thread for robot <id>\", \"Stop requested; robot <id> is still stopping\", or \"Stopped thread for robot <id>\".",
     "parameters": {
       "type": "OBJECT",
       "properties": {
         "robot_id": {
           "type": "INTEGER",
-          "description": "Robot ID whose threads should be stopped."
+          "description": "Robot ID whose controller thread should be stopped."
         },
         "join_timeout": {
           "type": "NUMBER",
-          "description": "Seconds to wait for threads to join after signaling stop. Default: 5.0."
+          "description": "Seconds to wait for the thread to join after signaling stop. Default: 5.0."
         }
       },
-      "required": ["robot_id"]
+      "required": [
+        "robot_id"
+      ]
     }
   }
 ]

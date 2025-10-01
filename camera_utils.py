@@ -1,4 +1,6 @@
 import cv2
+import os
+import json
 import hashlib
 import numpy as np
 from PIL import Image
@@ -43,21 +45,84 @@ def display_frame(frame, target_w, target_h):
 # ---------------------------
 # Drawing helpers (pose)
 # ---------------------------
+def _load_robot_names(json_path: str) -> dict[int, str]:
+    try:
+        if not os.path.exists(json_path):
+            return {}
+        with open(json_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        robots = data.get("robots", [])
+        out = {}
+        for r in robots:
+            try:
+                rid = int(r.get("id", -1))
+                if rid > 0:  # ignore id=0
+                    out[rid] = str(r.get("name", "")).strip()
+            except Exception:
+                continue
+        return out
+    except Exception:
+        return {}
+
+def _draw_label_box(img, text, anchor_xy, *,
+                    font=cv2.FONT_HERSHEY_SIMPLEX,
+                    font_scale=0.5, font_thickness=1,
+                    pad_x=4, pad_y=2,
+                    text_color=(255, 255, 255),
+                    bg_color=(0, 0, 0),
+                    offset=(6, -6)):
+    """
+    Draw a filled rectangle with text on top.
+      - anchor_xy: (x,y) point near which the label should appear
+      - offset: (dx, dy) from anchor to place the text box
+    """
+    x, y = int(anchor_xy[0]), int(anchor_xy[1])
+    dx, dy = offset
+
+    (tw, th), baseline = cv2.getTextSize(text, font, font_scale, font_thickness)
+    box_w = tw + 2 * pad_x
+    box_h = th + 2 * pad_y
+
+    # Top-left of the rectangle
+    tl_x = x + dx
+    tl_y = y + dy - box_h  # place above anchor by default
+
+    # Clamp box inside image bounds
+    H, W = img.shape[:2]
+    tl_x = max(0, min(tl_x, W - box_w))
+    tl_y = max(0, min(tl_y, H - box_h))
+
+    br_x = tl_x + box_w
+    br_y = tl_y + box_h
+
+    # Draw filled rectangle
+    cv2.rectangle(img, (tl_x, tl_y), (br_x, br_y), bg_color, thickness=-1)
+
+    # Put text (baseline aligned)
+    text_x = tl_x + pad_x
+    text_y = tl_y + box_h - pad_y - baseline
+    cv2.putText(img, text, (text_x, text_y), font, font_scale, text_color, font_thickness, lineType=cv2.LINE_AA)
+
 def draw_robot_pose(frame, x=None, y=None, theta=None, corners=None, 
                     box_color=(0, 0, 255), box_thickness=2,
                     center_color=(0, 0, 255), center_radius=4,
                     line_color=(0, 0, 255), line_thickness=2, line_len=20,
-                    robot_pos_path="Data/robot_pos.txt", draw_ids=True, font_scale=0.5, font_thickness=1):
+                    robot_pos_path="Data/robot_pos.txt", draw_ids=True,
+                    font_scale=0.5, font_thickness=1,
+                    robot_names_path="Data/robot_names.json"):
     """
     Modes:
       1) Single pose: if robot_pos_path is None, draws one robot using (x,y,theta[,corners]).
       2) Multi-robot: if robot_pos_path is provided, reads lines in 'id,x,y,theta' format and draws all.
 
-    All robots are drawn in the same red color (BGR = (0,0,255)).
+    Labels:
+      Uses Data/robot_names.json to show "Name(ID)" e.g., "Alpha(1)".
+      Falls back to just "(ID)" if name is missing.
+      Renders label on a black rectangle with white text.
     """
     frame_copy = frame.copy()
 
-    # --- Single-pose mode (original behavior) ---
+    # --- Single-pose mode ---
     if robot_pos_path is None:
         if corners is not None:
             pts = np.array(corners, dtype=np.int32).reshape((-1, 1, 2))
@@ -73,12 +138,15 @@ def draw_robot_pose(frame, x=None, y=None, theta=None, corners=None,
 
         return frame_copy
 
-    # --- Multi-robot mode (draw from file) ---
+    # --- Multi-robot mode ---
     try:
-        with open(robot_pos_path, "r") as f:
+        with open(robot_pos_path, "r", encoding="utf-8") as f:
             lines = f.readlines()
     except Exception:
         return frame_copy
+
+    # Load names once per call
+    id_to_name = _load_robot_names(robot_names_path)
 
     for ln in lines:
         ln = ln.strip()
@@ -95,22 +163,29 @@ def draw_robot_pose(frame, x=None, y=None, theta=None, corners=None,
         except ValueError:
             continue
 
-        # All same red color
+        # Draw center & heading (red)
         bgr = (0, 0, 255)
-
-        # Center
         cv2.circle(frame_copy, (int(xi), int(yi)), center_radius, bgr, -1)
-
-        # Heading line
         x2 = int(xi + line_len * math.cos(thetai))
         y2 = int(yi + line_len * math.sin(thetai))
         cv2.line(frame_copy, (int(xi), int(yi)), (x2, y2), bgr, line_thickness)
 
-        # Optional label
+        # Label box
         if draw_ids:
-            label = f"ID:{mid}"
-            cv2.putText(frame_copy, label, (int(xi) + 6, int(yi) - 6),
-                        cv2.FONT_HERSHEY_SIMPLEX, font_scale, bgr, font_thickness, lineType=cv2.LINE_AA)
+            name = id_to_name.get(mid, "").strip()
+            label = f"{name}({mid})" if name else f"({mid})"
+            _draw_label_box(
+                frame_copy,
+                label,
+                anchor_xy=(xi, yi),
+                font_scale=font_scale,
+                font_thickness=font_thickness,
+                text_color=(255, 255, 255),
+                bg_color=(0, 0, 0),
+                pad_x=5,
+                pad_y=3,
+                offset=(-30, -30)  # slightly to the right and above the center
+            )
 
     return frame_copy
 

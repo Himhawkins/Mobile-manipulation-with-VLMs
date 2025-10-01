@@ -47,13 +47,13 @@
   },
   {
     "name": "pick_and_drop",
-    "description": "Plans a pick-and-drop mission for one robot and saves/updates the SAME SIMPLE JSON (only id and path). The path embeds gripper actions directly as the third field of a waypoint using the strings \"close\" (pick) and \"open\" (drop) — no separate actions list. Typical sequence:\n[start, 0] → [pick_approach, \"close\"] → [drop_approach, \"open\"].\n- Uses A* on an inflated mask.\n- For each target (pick/drop), finds a reachable base pose on the circle of radius `gripper_offset_px` around the target, preferring the current→target direction but trying nearby angles if needed.\n- The first triple is always the robot start with 0.\n- If an entry for `id` already exists, it is replaced; otherwise appended.\n\nReturns:\n- \"Robot not found.\" if `robot_id` is not present in Data/robot_pos.txt.\n- \"Unable to find reachable pick approach.\" if no feasible approach near the pick point.\n- \"Unable to find reachable drop approach.\" if no feasible approach near the drop point.\n- \"Pick & drop path generation successful.\" after saving the JSON.\n\nExample Usage: `pick_and_drop(robot_id=782, pick_coordinates=[600,220], drop_coordinates=[1200,480], data_folder='Data', spacing=50, gripper_offset_px=10, path_json='Targets/paths.json')`",
+    "description": "Plans a pick-and-drop mission for one robot and saves/updates the SAME SIMPLE JSON (only id and path). The path stores heading in **radians** and embeds gripper actions as the fourth field:\n[start_x, start_y, theta_start_rad, 0] → (optional) [pre_pick_x, pre_pick_y, theta_face_pick_rad, 0] → [pick_app_x, pick_app_y, theta_face_pick_rad, \"close\"] → (optional) [pre_drop_x, pre_drop_y, theta_face_drop_rad, 0] → [drop_app_x, drop_app_y, theta_face_drop_rad, \"open\"].\n- Uses A* on an inflated mask.\n- For each target (pick/drop), finds a reachable base pose on the circle of radius `gripper_offset_px` around the target, preferring the current→target direction but trying nearby angles if needed.\n- Optionally inserts a **pre-align** waypoint `pre_align_offset_px` behind each approach point (if in free space and reachable) to help alignment before pick/drop.\n- If an entry for `id` already exists, it is replaced; otherwise appended.\n\nReturns:\n- \"Robot not found.\" if `robot_id` is not present in Data/robot_pos.txt.\n- \"Unable to find reachable pick approach.\" if no feasible approach near the pick point.\n- \"Unable to find reachable drop approach.\" if no feasible approach near the drop point.\n- \"Pick & drop path generation successful.\" after saving the JSON.\n\nExample Usage: `pick_and_drop(robot_id=782, pick_coordinates=[600,220], drop_coordinates=[1200,480], data_folder='Data', spacing=50, gripper_offset_px=10, pre_align_offset_px=10, path_json='Targets/paths.json')`",
     "parameters": {
       "type": "OBJECT",
       "properties": {
         "robot_id": {
           "type": "INTEGER",
-          "description": "Required. Robot ID to read from Data/robot_pos.txt (rows: id,x,y,theta)."
+          "description": "Required. Robot ID to read from Data/robot_pos.txt (rows: id,x,y,theta_deg_optional)."
         },
         "pick_coordinates": {
           "type": "ARRAY",
@@ -72,10 +72,6 @@
         "spacing": {
           "type": "INTEGER",
           "description": "Dilation spacing (pixels) around obstacles for planning safety. Default: 50."
-        },
-        "gripper_offset_px": {
-          "type": "INTEGER",
-          "description": "Forward offset (pixels) from robot base to gripper tip; used to stop in front of the pick/drop target. Default: 10."
         },
         "path_json": {
           "type": "STRING",

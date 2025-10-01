@@ -157,7 +157,6 @@ def _angle_spiral(center_angle: float, n: int):
         yield center_angle - k * d
         k += 1
 
-
 def _find_reachable_approach(planner: PathPlanner,
                              current_xy: tuple[int, int],
                              target_xy: tuple[int, int],
@@ -203,6 +202,47 @@ def _heading_rad(p_from: tuple[int, int], p_to: tuple[int, int]) -> float:
     dx = float(p_to[0] - p_from[0])
     dy = float(p_to[1] - p_from[1])
     return math.atan2(dy, dx)
+
+def _pre_align_point(planner: PathPlanner,
+                     app_xy: tuple[int, int],
+                     target_xy: tuple[int, int],
+                     backoff_px: int,
+                     current_xy: tuple[int, int],
+                     log) -> tuple[int, int] | None:
+    """
+    Given an approach point `app_xy` (which faces `target_xy`), compute a waypoint
+    that is `backoff_px` *behind* app_xy along the app->target line. Ensure it's
+    in-bounds, free, and reachable from `current_xy`. Returns None if not feasible.
+    """
+    ax, ay = app_xy
+    tx, ty = target_xy
+
+    # Direction from approach -> target
+    dx, dy = float(tx - ax), float(ty - ay)
+    norm = math.hypot(dx, dy)
+    if norm < 1e-6:
+        # Degenerate; just try to step left on x
+        ux, uy = 1.0, 0.0
+    else:
+        ux, uy = dx / norm, dy / norm
+
+    # "Behind" = move away from target (opposite direction of (ux,uy))
+    px = int(round(ax - backoff_px * ux))
+    py = int(round(ay - backoff_px * uy))
+
+    H, W = planner.mask.shape[:2]
+    if not (0 <= px < W and 0 <= py < H):
+        log("  ✖ pre-align out of bounds")
+        return None
+    if not _point_in_free(planner.mask, (px, py)):
+        log("  ✖ pre-align not in free space")
+        return None
+    if not _path_exists(planner, current_xy, (px, py)):
+        log("  ✖ pre-align not reachable from current")
+        return None
+
+    log(f"  ✔ pre-align @ ({px},{py}) backoff={backoff_px}px")
+    return (px, py)
 
 
 # ---------- Public APIs ----------
@@ -323,18 +363,19 @@ def pick_and_drop(
     *,
     data_folder: str = "Data",
     spacing: int = 50,
-    gripper_offset_px: int = 10,
     path_json: str = "Targets/paths.json",
     verbose: bool = False,
 ) -> str:
     """
-    Generate a path for picking and dropping an object with a forward gripper.
+    Generate a path that directly appends the given pick and drop coordinates,
+    without any gripper offset or pre-align steps.
 
     Output JSON path for robot_id (theta in radians):
       [[sx,sy,theta_start,0],
-       [pick_approach_x, pick_approach_y, theta_face_pick, "close"],
-       [drop_approach_x, drop_approach_y, theta_face_drop, "open"]]
+       [pick_x, pick_y, theta_pick, "close"],
+       [drop_x, drop_y, theta_drop, "open"]]
     """
+
     log = print if verbose else (lambda *a, **k: None)
 
     # --- Load environment & pose ---
@@ -360,55 +401,47 @@ def pick_and_drop(
     except Exception:
         s_theta_deg = None
 
+    # Optional environment read (kept for consistency / bounds if you later need it)
     arena = [tuple(map(int, row)) for row in data.get("arena_corners", [])]
     polys = [[tuple(map(int, p)) for p in poly] for poly in data.get("obstacles", [])]
-
     frame_path = os.path.join(data_folder, "frame_img.png")
     frame = cv2.imread(frame_path)
     if frame is None:
         raise FileNotFoundError(f"Could not load image at '{frame_path}'")
     H, W = frame.shape[:2]
-
     obstacles = [{"corners": poly} for poly in polys]
     planner = PathPlanner(obstacles, (H, W), arena_corners=arena)
-    planner.mask = _inflate_mask(planner.mask, int(spacing))
+    planner.mask = _inflate_mask(planner.mask, int(spacing))  # not strictly needed now
 
-    # --- Compute approaches ---
+    # --- Exact targets ---
     pick_xy = (int(pick_coordinates[0]), int(pick_coordinates[1]))
     drop_xy = (int(drop_coordinates[0]), int(drop_coordinates[1]))
 
-    log(f"[pick&drop] id={robot_id} start={start_xy} spacing={spacing}px approach_r={gripper_offset_px}px")
-    log(f"  pick={pick_xy}  drop={drop_xy}")
+    log(f"[pick&drop-simple] id={robot_id} start={start_xy} pick={pick_xy} drop={drop_xy}")
 
-    pick_app = _find_reachable_approach(planner, start_xy, pick_xy, gripper_offset_px, log)
-    if pick_app is None:
-        return "Unable to find reachable pick approach."
+    # --- Angles (simple headings along the segments) ---
+    def _heading_rad(p_from: tuple[int, int], p_to: tuple[int, int]) -> float:
+        dx = float(p_to[0] - p_from[0]); dy = float(p_to[1] - p_from[1])
+        return math.atan2(dy, dx)
 
-    # Bias drop search by pick->drop direction (we pass pick_xy as the "current" base)
-    drop_app = _find_reachable_approach(planner, pick_xy, drop_xy, gripper_offset_px, log)
-    if drop_app is None:
-        return "Unable to find reachable drop approach."
-
-    # Start theta: prefer provided; else face toward pick_app; else 0
     if s_theta_deg is None:
-        s_theta = _heading_rad(start_xy, pick_app) if pick_app is not None else 0.0
+        s_theta = _heading_rad(start_xy, pick_xy) if pick_xy != start_xy else 0.0
     else:
         s_theta = math.radians(s_theta_deg)
 
-    theta_pick = _heading_rad(pick_app, pick_xy)
-    theta_drop = _heading_rad(drop_app, drop_xy)
+    theta_pick = _heading_rad(start_xy, pick_xy)
+    theta_drop = _heading_rad(pick_xy, drop_xy)
 
-    path_points = [
-        [start_xy[0], start_xy[1], float(s_theta), 0],
-        [pick_app[0], pick_app[1], float(theta_pick), "close"],
-        [drop_app[0], drop_app[1], float(theta_drop), "open"],
-    ]
+    # --- Build path (no offsets, no pre-align) ---
+    path_points: list[list[int | float | str]] = []
+    # path_points.append([start_xy[0], start_xy[1], float(s_theta), 0])
+    path_points.append([pick_xy[0],  pick_xy[1],  float(theta_pick), "close"])
+    path_points.append([drop_xy[0],  drop_xy[1],  float(theta_drop), "open"])
 
     _upsert_robot_path(path_json, int(robot_id), path_points)
     log(f"[save] {path_json} updated for id={robot_id}")
 
     return "Pick & drop path generation successful."
-
 
 
 
@@ -449,7 +482,6 @@ if __name__ == "__main__":
             drop_coordinates=(820, 360),
             data_folder="Data",
             spacing=40,
-            gripper_offset_px=10,
             path_json=PATH_JSON,
             verbose=True,
         )

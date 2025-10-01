@@ -1,0 +1,67 @@
+[
+  {
+    "name": "rename_robot",
+    "description": "Update or add a robot's name in Data/robot_names.json. If the robot ID already exists, its name is updated; otherwise, a new entry is created.\n\nOutput: A status message string confirming the update.\n\nExample: `rename_robot(robot_id=2, robot_name='Bravo')`",
+    "parameters": {
+      "type": "OBJECT",
+      "properties": {
+        "robot_id": {
+          "type": "INTEGER",
+          "description": "The ID of the robot to update or add."
+        },
+        "robot_name": {
+          "type": "STRING",
+          "description": "The new name to assign to the robot."
+        },
+        "json_path": {
+          "type": "STRING",
+          "description": "Optional path to the robot_names.json file (default: Data/robot_names.json)."
+        }
+      },
+      "required": [
+        "robot_id",
+        "robot_name"
+      ]
+    }
+  },
+  {
+    "name": "get_robot_name",
+    "description": "Fetch the name of a robot given its ID from Data/robot_names.json.\n\nOutput: The robot name as a string if found, else `None`.\n\nExample: `get_robot_name(robot_id=1)` → 'Alpha'",
+    "parameters": {
+      "type": "OBJECT",
+      "properties": {
+        "robot_id": {
+          "type": "INTEGER",
+          "description": "The ID of the robot whose name should be retrieved."
+        },
+        "json_path": {
+          "type": "STRING",
+          "description": "Optional path to the robot_names.json file (default: Data/robot_names.json)."
+        }
+      },
+      "required": [
+        "robot_id"
+      ]
+    }
+  },
+  {
+    "name": "get_robot_id",
+    "description": "Fetch the ID of a robot given its name from Data/robot_names.json.\n\nOutput: The robot ID as an integer if found, else `None`.\n\nExample: `get_robot_id(robot_name='Alpha')` → 1",
+    "parameters": {
+      "type": "OBJECT",
+      "properties": {
+        "robot_name": {
+          "type": "STRING",
+          "description": "The name of the robot to look up."
+        },
+        "json_path": {
+          "type": "STRING",
+          "description": "Optional path to the robot_names.json file (default: Data/robot_names.json)."
+        }
+      },
+      "required": [
+        "robot_name"
+      ]
+    }
+  }
+]

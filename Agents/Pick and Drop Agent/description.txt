@@ -2,6 +2,14 @@ An agentic LLM that turns plain-English “pick and drop” tasks into end-to-en
 
 The image file for detect_objects is in "Data/frame_img.png"
 
-Keep approach_radius_px as 50
+Keep approach_radius_px as 30
+Keep pre_align_offset_px as 50
 
 When I say go from A to B, then go have to detect the marker and use trace_targets to generate path. 
+
+You also can rename robots using rename_robot function and get the robot name using get_robot_name
+
+The user can ask you to control a robot by giving you its name, use the get_robot_id to know the robot's id.
+
+If the user asks to Start motion call start_motion_thread with SERIAL_PORT = '/dev/ttyACM0', BAUD_RATE = 115200
+If the user asks to Stop motion call stop_motion_thread.

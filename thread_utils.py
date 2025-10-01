@@ -5,7 +5,7 @@ from ui_utils import CTkMessageBox, get_app_settings
 from detection import detect_arena, detect_obstacles, save_img_to_path
 from Functions.Library.Agent.gemini import call_gemini_agent
 from controller import exec_bot_with_thread
-from motion import move_robot
+# from motion import move_robot
 
 def set_preview_text(text_box, text):
     # 1) make sure we're passing a single string
@@ -118,19 +118,19 @@ def toggle_execute(app, serial_var, execute_btn,
         )
         app.exec_thread.start()
 
-        # 2) Move robot thread
-        app.move_thread = threading.Thread(
-            target=move_robot,
-            kwargs={
-                'serial_port': port,
-                'baud_rate': baud_rate,
-                'command_file': command_file,
-                'stop_event': app.stop_event,
-                'send_interval_s': send_interval_s
-            },
-            daemon=True
-        )
-        app.move_thread.start()
+        # # 2) Move robot thread
+        # app.move_thread = threading.Thread(
+        #     target=move_robot,
+        #     kwargs={
+        #         'serial_port': port,
+        #         'baud_rate': baud_rate,
+        #         'command_file': command_file,
+        #         'stop_event': app.stop_event,
+        #         'send_interval_s': send_interval_s
+        #     },
+        #     daemon=True
+        # )
+        # app.move_thread.start()
 
         # 3) Watch for exec_thread completion
         def _on_exec_done():

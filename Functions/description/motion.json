@@ -1,0 +1,47 @@
+[
+  {
+    "name": "start_motion_thread",
+    "description": "Creates and starts a background motion thread for a specific serial port. The thread reads commands from a JSON file and sends them to the hardware. It is managed in a global registry to prevent duplicates. Returns a status string indicating success or if a thread is already running.",
+    "parameters": {
+      "type": "OBJECT",
+      "properties": {
+        "serial_port": {
+          "type": "STRING",
+          "description": "The serial device path for communicating with the robots, used as a unique identifier for the thread. Example: '/dev/ttyACM0' or 'COM3'."
+        },
+        "baud_rate": {
+          "type": "INTEGER",
+          "description": "The baud rate for the serial communication. Example: 115200."
+        },
+        "command_file": {
+          "type": "STRING",
+          "description": "The path to the JSON file from which robot commands are read. Defaults to 'Data/command.json'."
+        }
+      },
+      "required": [
+        "serial_port",
+        "baud_rate"
+      ]
+    }
+  },
+  {
+    "name": "stop_motion_thread",
+    "description": "Signals the motion thread associated with a specific serial port to stop cleanly. Returns a status string indicating the result.",
+    "parameters": {
+      "type": "OBJECT",
+      "properties": {
+        "serial_port": {
+          "type": "STRING",
+          "description": "The serial port identifier of the motion thread that should be stopped."
+        },
+        "join_timeout": {
+          "type": "NUMBER",
+          "description": "Seconds to wait for the thread to join after signaling stop. Defaults to 5.0."
+        }
+      },
+      "required": [
+        "serial_port"
+      ]
+    }
+  }
+]

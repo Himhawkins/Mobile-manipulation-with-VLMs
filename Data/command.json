@@ -1,0 +1,28 @@
+{
+  "robots": [
+    {
+      "id": 1,
+      "left": 90,
+      "right": 90,
+      "gripper": "open"
+    },
+    {
+      "id": 2,
+      "left": 92,
+      "right": 95,
+      "gripper": "open"
+    },
+    {
+      "id": 3,
+      "left": 95,
+      "right": 94,
+      "gripper": "open"
+    },
+    {
+      "id": 4,
+      "left": 90,
+      "right": 90,
+      "gripper": "open"
+    }
+  ]
+}

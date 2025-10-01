@@ -186,7 +186,7 @@ def stop_motion_thread(serial_port: str, join_timeout: float = 5.0) -> str:
 if __name__ == "__main__":
     # --- Configuration ---
     SERIAL_PORT = '/dev/ttyACM0' # <-- IMPORTANT: CHANGE THIS TO YOUR SERIAL PORT
-    BAUD_RATE = 115200
+    BAUD_RATE = 1152_00
     COMMAND_FILE = "Data/command.json"
 
     # The main block now uses the simplified start/stop functions
