@@ -726,7 +726,7 @@ class PIDController:
         dist_tolerance=18.0, ang_tolerance=18.0, final_distance_tol=10.0,
         data_folder="Data", spacing_px=40, plan_spacing_boost_px=8,
         linear_step_px=12, simplify_dist_px=10,
-        offset_px=100, replan_check_period_s=0.10, replan_wait_backoff_s=0.20,
+        offset_px=100, replan_check_period_s=0.10, replan_wait_backoff_s=0.05,
         speed_min=70, speed_max=110, speed_neutral=90, max_lin=30,
         nearest_free_radius=50, linecheck_margin_px=1,
         clearance_boost_px=0,
@@ -1014,7 +1014,74 @@ class PIDController:
                 self._seg_path = None
                 self._seg_index = 0
                 continue
+            
+            # # --- NEW: Instant Stop Safety Check ---
+            # # This check runs on every tick for immediate reaction. It verifies that the
+            # # direct line to the *next immediate waypoint* is clear using the latest
+            # # obstacle map.
+            # if self._seg_path and self._seg_index < len(self._seg_path):
+            #     current_pos_tuple = (x, y)
+            #     next_waypoint = self._seg_path[self._seg_index]
 
+            #     # Perform a fast check against the robot's "no-go" zone mask.
+            #     # self.cache.mask_for_line is already dilated to account for the robot's width.
+            #     is_immediate_path_obstructed = _line_blocked_multi(
+            #         [self.cache.mask_for_line],
+            #         current_pos_tuple,
+            #         next_waypoint
+            #     )
+
+            #     if is_immediate_path_obstructed:
+            #         _dbg(f"INSTANT_STOP: Path to waypoint {self._seg_index} is obstructed. Stopping and forcing replan.", self._tick)
+            #         # 1. Stop the robot immediately. This is the core of the change.
+            #         self.iface.write_wheel_command(self.speed_neutral, self.speed_neutral)
+                    
+            #         # 2. Invalidate the current path. This signals the main logic to
+            #         #    trigger a full A* replan on the next iteration.
+            #         self._seg_path = None
+            #         self._seg_index = 0
+                    
+            #         # 3. A small pause to prevent a high-CPU spin if the robot is
+            #         #    completely boxed-in and replanning fails repeatedly.
+            #         time.sleep(0.05) 
+                    
+            #         # 4. Skip the rest of this loop's logic (which would move the robot).
+            #         continue
+            # --- END: Instant Stop Safety Check ---
+            
+            ## TEST THIS LATER
+            # --- MODIFIED: Proactive Full-Path Safety Check ---
+            # This version checks the entire remaining path on every tick.
+            # WARNING: This is computationally more expensive than the immediate-only check
+            # and may slow down the control loop if paths are long.
+            if self._seg_path and self._seg_index < len(self._seg_path):
+                is_path_obstructed = False
+                # Start the check from the robot's current physical location.
+                last_valid_point = (x, y)
+                
+                # Loop through all remaining waypoints in the current path segment.
+                for i in range(self._seg_index, len(self._seg_path)):
+                    next_waypoint = self._seg_path[i]
+                    if _line_blocked_multi([self.cache.mask_for_line], last_valid_point, next_waypoint):
+                        _dbg(f"PROACTIVE_STOP: Future path segment to waypoint {i} is obstructed. Stopping.", self._tick)
+                        is_path_obstructed = True
+                        break # Found a blockage, no need to check further.
+                    
+                    # The end of this segment becomes the start of the next check.
+                    last_valid_point = next_waypoint
+
+                if is_path_obstructed:
+                    # Same stop-and-replan logic as before.
+                    self.iface.write_wheel_command(self.speed_neutral, self.speed_neutral)
+                    
+                    self._seg_path = None
+                    self._seg_index = 0
+                    
+                    time.sleep(0.05) 
+                    
+                    continue
+            # --- END: Proactive Full-Path Safety Check ---
+            
             cur_wp = self._seg_path[min(self._seg_index, len(self._seg_path)-1)]
             tx, ty = float(cur_wp[0]), float(cur_wp[1])
 

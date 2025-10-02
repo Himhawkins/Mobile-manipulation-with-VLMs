@@ -1,28 +1,19 @@
 {
   "robots": [
     {
-      "id": 1,
-      "left": 90,
-      "right": 90,
-      "gripper": "open"
-    },
-    {
       "id": 2,
-      "left": 92,
-      "right": 95,
-      "gripper": "open"
+      "left": 90,
+      "right": 90
     },
     {
       "id": 3,
       "left": 95,
-      "right": 94,
-      "gripper": "open"
+      "right": 95
     },
     {
-      "id": 4,
+      "id": 1,
       "left": 90,
-      "right": 90,
-      "gripper": "open"
+      "right": 90
     }
   ]
 }

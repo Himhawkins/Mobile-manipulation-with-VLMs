@@ -199,7 +199,7 @@ if __name__ == "__main__":
         if "Started" in status:
             print("Main program is running. The motion thread is active in the background.")
             print("This will run for 10 seconds or until Ctrl+C is pressed.")
-            time.sleep(10)
+            time.sleep(30)
 
     except KeyboardInterrupt:
         print("\nCtrl+C detected in main program. Shutting down.")
