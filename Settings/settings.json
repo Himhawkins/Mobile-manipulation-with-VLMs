@@ -1,7 +1,4 @@
 {
-    "aruco_id": "782",
-    "arena_width": "1500",
-    "arena_height": "500",
-    "corner_prompt": "Blue Circles",
-    "obstacle_prompt": "Black Rectangles with NO white space"
+  "serial_port": "/dev/ttyACM0",
+  "obstacle_prompt": "Black Rectangles with NO white space"
 }

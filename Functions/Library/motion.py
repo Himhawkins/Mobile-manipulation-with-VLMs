@@ -3,12 +3,47 @@ import sys
 import serial
 import time
 import json
+import os  # Added for file path operations
 import threading
 from typing import List, Tuple, Optional
 
 # --------------------- Global Thread Management ---------------------
 _motion_threads = {}  # { serial_port: {"thread": Thread, "stop_event": Event} }
 _motion_threads_lock = threading.Lock()
+
+# --------------------- Settings Loader (NEW) ---------------------
+def load_settings(path: str = "Settings/settings.json") -> dict:
+    """
+    Loads settings from a JSON file. If the file doesn't exist,
+    it creates a default one.
+    """
+    # Ensure the parent directory exists
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+
+    if not os.path.exists(path):
+        print(f"[WARNING] Settings file not found at '{path}'. Creating a default file.")
+        default_settings = {
+          "serial_port": "/dev/ttyACM0",
+          "obstacle_prompt": "Black Rectangles with NO white space"
+        }
+        try:
+            with open(path, "w") as f:
+                json.dump(default_settings, f, indent=2)
+            return default_settings
+        except Exception as e:
+            print(f"[ERROR] Could not create default settings file at '{path}': {e}", file=sys.stderr)
+            return {}
+
+    try:
+        with open(path, "r") as f:
+            data = json.load(f)
+            return data if isinstance(data, dict) else {}
+    except json.JSONDecodeError:
+        print(f"[ERROR] Could not decode JSON from '{path}'. Please check its format.", file=sys.stderr)
+        return {}
+    except Exception as e:
+        print(f"[ERROR] An unexpected error occurred while reading '{path}': {e}", file=sys.stderr)
+        return {}
 
 # --------------------- Low-level send helpers ---------------------
 def _send_command(
@@ -67,7 +102,7 @@ def move_robots(
                 with open(command_file, 'r') as f:
                     data = json.load(f)
                 robot_commands = data.get("robots", [])
-                
+
                 current_ids = [cmd['id'] for cmd in robot_commands if 'id' in cmd]
                 if current_ids:
                     last_known_robot_ids = current_ids
@@ -119,7 +154,7 @@ def move_robots(
                     except Exception as e:
                         print(f"[{serial_port}] [ERROR] Failed to send stop command to robot {robot_id}: {e}", file=sys.stderr)
                 time.sleep(0.1)
-            
+
             ser.close()
             print(f"[{serial_port}] Serial port closed.")
 
@@ -147,7 +182,7 @@ def start_motion_thread(
             daemon=True
         )
         motion_thread.start()
-        
+
         _motion_threads[serial_port] = {
             "thread": motion_thread,
             "stop_event": stop_event
@@ -163,7 +198,7 @@ def stop_motion_thread(serial_port: str, join_timeout: float = 5.0) -> str:
         info = _motion_threads.get(serial_port)
         if not info or not info['thread'].is_alive():
             return f"No running motion thread for port {serial_port}"
-        
+
         print(f"Signaling motion thread on port {serial_port} to stop...")
         stop_event = info["stop_event"]
         thread = info["thread"]
@@ -184,17 +219,25 @@ def stop_motion_thread(serial_port: str, join_timeout: float = 5.0) -> str:
 
 # --------------------- Main Execution Example ---------------------
 if __name__ == "__main__":
-    # --- Configuration ---
-    SERIAL_PORT = '/dev/ttyACM0' # <-- IMPORTANT: CHANGE THIS TO YOUR SERIAL PORT
-    BAUD_RATE = 1152_00
+    # --- Configuration (MODIFIED) ---
+    print("--- Running motion manager ---")
+    settings = load_settings("Settings/settings.json")
+
+    # Get serial port from settings, with a fallback default
+    SERIAL_PORT = settings.get('serial_port', '/dev/ttyACM0')
+    if 'serial_port' not in settings:
+        print(f"[INFO] 'serial_port' key not found in settings.json. Using default: '{SERIAL_PORT}'")
+    else:
+        print(f"Loaded serial port '{SERIAL_PORT}' from settings.json")
+
+    BAUD_RATE = 115200
     COMMAND_FILE = "Data/command.json"
 
     # The main block now uses the simplified start/stop functions
-    print("--- Running motion manager ---")
     try:
         status = start_motion_thread(SERIAL_PORT, BAUD_RATE, COMMAND_FILE)
         print(status)
-        
+
         # If the thread started successfully, the main program can do other things.
         if "Started" in status:
             print("Main program is running. The motion thread is active in the background.")

@@ -9,6 +9,7 @@ from PIL import Image, ImageTk, ImageOps
 import numpy as np
 from astar import PathPlanner
 from Functions.Library.Agent.load_data import read_data
+from port_utils import refresh_serial_ports
 
 class CTkMessageBox(ctk.CTkToplevel):
     def __init__(self, parent, title, message, text_color):
@@ -63,10 +64,8 @@ class CheckGroup(ctk.CTkFrame):
 def get_app_settings():
     settings_path = "Settings/settings.json"
     default_settings = {
-        "arena_width": "800",
-        "arena_height": "800",
-        "corner_prompt": "detect four circular markers",
-        "obstacle_prompt": "detect black rectangular obstacles"
+        "serial_port": "/dev/ttyACM0",
+        "obstacle_prompt": "Detect black rectangular obstacles"
     }
     try:
         with open(settings_path, "r") as f:
@@ -78,11 +77,8 @@ def open_settings_popup(app):
     settings_path = "Settings/settings.json"
     os.makedirs(os.path.dirname(settings_path), exist_ok=True)
     default_settings = {
-        "aruco_id": "782",
-        "arena_width": "800",
-        "arena_height": "800",
-        "corner_prompt": "detect four circular markers",
-        "obstacle_prompt": "detect black rectangular obstacles"
+        "serial_port": "/dev/ttyACM0",
+        "obstacle_prompt": "Detect black rectangular obstacles"
     }
     try:
         with open(settings_path, "r") as f:
@@ -92,7 +88,7 @@ def open_settings_popup(app):
 
     popup = ctk.CTkToplevel(app)
     popup.title("Settings")
-    popup.geometry("400x450")
+    popup.geometry("420x200")
     popup.resizable(False, False)
     app.settings_popup = popup
 
@@ -101,21 +97,29 @@ def open_settings_popup(app):
         app.settings_popup = None
     popup.protocol("WM_DELETE_WINDOW", close_popup)
 
+    # --- Serial port selection (added) ---
+    serial_row = ctk.CTkFrame(popup)
+    serial_row.pack(fill="x", padx=20, pady=(16, 8))
+    ctk.CTkLabel(serial_row, text="Serial Port:").pack(side="left")
+    _ports = refresh_serial_ports()
+    serial_var = ctk.StringVar(value=settings.get("serial_port", (_ports[0] if _ports else "")))
+    serial_menu = ctk.CTkOptionMenu(
+        serial_row,
+        values=_ports if _ports else [serial_var.get()],
+        variable=serial_var
+    )
+    serial_menu.pack(side="left", expand=True, fill="x", padx=(10, 10))
+    def _refresh_ports():
+        new_ports = refresh_serial_ports()
+        serial_menu.configure(values=new_ports if new_ports else [""])
+        if new_ports:
+            serial_var.set(new_ports[0])
+    ctk.CTkButton(serial_row, text="Refresh Ports", command=_refresh_ports).pack(side="right")
+
     vars = {
-        "aruco_id": ctk.StringVar(value=settings.get("aruco_id", default_settings["aruco_id"])),
-        "arena_width": ctk.StringVar(value=settings.get("arena_width", default_settings["arena_width"])),
-        "arena_height": ctk.StringVar(value=settings.get("arena_height", default_settings["arena_height"])),
-        "corner_prompt": ctk.StringVar(value=settings.get("corner_prompt", default_settings["corner_prompt"])),
+        "serial_port": serial_var,
         "obstacle_prompt": ctk.StringVar(value=settings.get("obstacle_prompt", default_settings["obstacle_prompt"])),
     }
-    ctk.CTkLabel(popup, text="Robot ArUco ID:").pack(anchor="w", padx=20, pady=(10, 0))
-    ctk.CTkEntry(popup, textvariable=vars["aruco_id"]).pack(fill="x", padx=20, pady=5)
-    ctk.CTkLabel(popup, text="Arena Width:").pack(anchor="w", padx=20, pady=(10, 0))
-    ctk.CTkEntry(popup, textvariable=vars["arena_width"]).pack(fill="x", padx=20, pady=5)
-    ctk.CTkLabel(popup, text="Arena Height:").pack(anchor="w", padx=20, pady=(10, 0))
-    ctk.CTkEntry(popup, textvariable=vars["arena_height"]).pack(fill="x", padx=20, pady=5)
-    ctk.CTkLabel(popup, text="Arena Corner Prompt:").pack(anchor="w", padx=20, pady=(10, 0))
-    ctk.CTkEntry(popup, textvariable=vars["corner_prompt"]).pack(fill="x", padx=20, pady=5)
     ctk.CTkLabel(popup, text="Obstacles Prompt:").pack(anchor="w", padx=20, pady=(10, 0))
     ctk.CTkEntry(popup, textvariable=vars["obstacle_prompt"]).pack(fill="x", padx=20, pady=5)
 
@@ -699,3 +703,12 @@ def point_selection(data_folder='Data',
     app.mainloop()
 
     return result_message or "User didn't select any points"
+
+def apply_default_font(widget, size=14, weight="normal"):
+    """Recursively apply font to all CustomTkinter widgets."""
+    for child in widget.winfo_children():
+        try:
+            child.configure(font=("Arial", size, weight))
+        except Exception:
+            pass
+        apply_default_font(child, size, weight)

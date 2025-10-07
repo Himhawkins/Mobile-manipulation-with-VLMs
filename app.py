@@ -6,7 +6,7 @@ import customtkinter as ctk
 import threading
 
 # Import from new helper modules
-from ui_utils import CTkMessageBox, CheckGroup, get_app_settings, open_settings_popup
+from ui_utils import CTkMessageBox, CheckGroup, get_app_settings, open_settings_popup, apply_default_font
 from camera_utils import display_frame, draw_robot_pose, draw_robot_pose_with_sprite
 from agent_utils import save_agent_to_disk, get_agent_folders, get_agent_functions, get_all_functions
 from port_utils import refresh_serial_ports
@@ -19,7 +19,7 @@ from detection import detect_realtime_obstacles
 class DashboardApp(ctk.CTk):
     def __init__(self):
         super().__init__()
-        self.title("Dashboard")
+        self.title("LLM Controlled Robots")
         self.geometry("1200x800")
 
         self.grid_rowconfigure(0, weight=0)
@@ -36,20 +36,6 @@ class DashboardApp(ctk.CTk):
         top_frame = ctk.CTkFrame(self)
         top_frame.grid(row=0, column=0, sticky="nsew", padx=10, pady=(10, 5))
         top_frame.grid_columnconfigure((0, 1), weight=1)
-
-        port_frame = ctk.CTkFrame(top_frame)
-        port_frame.grid(row=0, column=0, sticky="w", padx=5)
-        init_serial_list = refresh_serial_ports()
-        self.serial_var = ctk.StringVar(value=init_serial_list[0] if init_serial_list else "")
-        self.serial_menu = ctk.CTkOptionMenu(
-            port_frame,
-            variable=self.serial_var,
-            values=init_serial_list,
-            command=self.on_serial_change
-        )
-        self.serial_menu.grid(row=0, column=0)
-        ctk.CTkButton(port_frame, text="Refresh Ports", command=self.on_refresh_ports)\
-            .grid(row=0, column=1, padx=5)
 
         ctk.CTkButton(top_frame, text="Arena Configuration", command=self.on_arena_config)\
             .grid(row=0, column=1, sticky="e", padx=5)
@@ -71,7 +57,7 @@ class DashboardApp(ctk.CTk):
 
         self.cap = None
 
-        self.preview1_txt = ctk.CTkTextbox(middle_frame, width=700, border_width=1, corner_radius=8, state="disabled")
+        self.preview1_txt = ctk.CTkTextbox(middle_frame, width=500, border_width=1, corner_radius=8, state="disabled")
         self.preview1_txt.grid(row=0, column=1, sticky="nsew", pady=(10,5), padx=(5,10))
 
         # Bottom Section
@@ -140,6 +126,7 @@ class DashboardApp(ctk.CTk):
         self.caps = open_all_cameras(self.arena_settings)
 
         self.on_update_video()
+        self.after(100, lambda: apply_default_font(self, size=14))
 
     # --- NEW: Event handlers for the input entry ---
     def _handle_run_command(self, event):

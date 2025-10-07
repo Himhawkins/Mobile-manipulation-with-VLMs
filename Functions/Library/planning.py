@@ -285,13 +285,6 @@ def trace_targets(
         return "Robot not found."
 
     sx, sy = int(matches[0][1]), int(matches[0][2])
-    # try to read initial heading (deg) if present (4th column)
-    s_theta_deg = None
-    try:
-        s_theta_deg = float(matches[0][3])
-    except Exception:
-        s_theta_deg = None
-
     start_xy = (sx, sy)
 
     arena = [tuple(map(int, row)) for row in data.get("arena_corners", [])]
@@ -318,7 +311,8 @@ def trace_targets(
             raise ValueError("Length of 'delay' must match number of targets")
 
     # --- Choose points (either target or offset) ---
-    chosen_points: list[tuple[int, int]] = []
+    # MODIFIED: Store tuples of (chosen_point, original_target)
+    chosen_points_data: list[tuple[tuple[int, int], tuple[int, int]]] = []
     current = start_xy
 
     log(f"[trace] id={robot_id} start={current} spacing={spacing}px offset={offset}px")
@@ -329,24 +323,24 @@ def trace_targets(
             log(f"  -> skipping unreachable {tgt}")
             continue
         choice = (int(choice[0]), int(choice[1]))
-        chosen_points.append(choice)
+        chosen_points_data.append((choice, tgt)) # Store both chosen and original
         current = choice
         log(f"  -> chosen {choice} (delay={delays[i]})")
 
     # --- Build JSON path with theta in radians ---
-    if s_theta_deg is None:
-        if len(chosen_points) > 0:
-            s_theta = _heading_rad(start_xy, chosen_points[0])
-        else:
-            s_theta = 0.0
-    else:
-        s_theta = math.radians(s_theta_deg)
-
-    out_path: list[list[int | float | str]] = [[start_xy[0], start_xy[1], float(s_theta), 0]]
+    # MODIFIED: Initialize path as empty list, removing the start pose
+    out_path: list[list[int | float | str]] = []
 
     prev = start_xy
-    for i, pt in enumerate(chosen_points):
-        th = _heading_rad(prev, pt)
+    # MODIFIED: Loop through new data structure to set correct headings
+    for i, (pt, original_tgt) in enumerate(chosen_points_data):
+        # If the chosen point is an offset, the desired pose is to face the original target.
+        if pt != original_tgt:
+            th = _heading_rad(pt, original_tgt)
+        # Otherwise (if it's a direct hit), face the direction of travel.
+        else:
+            th = _heading_rad(prev, pt)
+        
         out_path.append([pt[0], pt[1], float(th), int(delays[i])])
         prev = pt
 
@@ -371,8 +365,7 @@ def pick_and_drop(
     without any gripper offset or pre-align steps.
 
     Output JSON path for robot_id (theta in radians):
-      [[sx,sy,theta_start,0],
-       [pick_x, pick_y, theta_pick, "close"],
+      [[pick_x, pick_y, theta_pick, "close"],
        [drop_x, drop_y, theta_drop, "open"]]
     """
 
@@ -394,14 +387,7 @@ def pick_and_drop(
     sx, sy = int(matches[0][1]), int(matches[0][2])
     start_xy = (sx, sy)
 
-    # read initial theta if present (deg → rad)
-    s_theta_deg = None
-    try:
-        s_theta_deg = float(matches[0][3])
-    except Exception:
-        s_theta_deg = None
-
-    # Optional environment read (kept for consistency / bounds if you later need it)
+    # Optional environment read
     arena = [tuple(map(int, row)) for row in data.get("arena_corners", [])]
     polys = [[tuple(map(int, p)) for p in poly] for poly in data.get("obstacles", [])]
     frame_path = os.path.join(data_folder, "frame_img.png")
@@ -411,7 +397,7 @@ def pick_and_drop(
     H, W = frame.shape[:2]
     obstacles = [{"corners": poly} for poly in polys]
     planner = PathPlanner(obstacles, (H, W), arena_corners=arena)
-    planner.mask = _inflate_mask(planner.mask, int(spacing))  # not strictly needed now
+    planner.mask = _inflate_mask(planner.mask, int(spacing))
 
     # --- Exact targets ---
     pick_xy = (int(pick_coordinates[0]), int(pick_coordinates[1]))
@@ -420,21 +406,12 @@ def pick_and_drop(
     log(f"[pick&drop-simple] id={robot_id} start={start_xy} pick={pick_xy} drop={drop_xy}")
 
     # --- Angles (simple headings along the segments) ---
-    def _heading_rad(p_from: tuple[int, int], p_to: tuple[int, int]) -> float:
-        dx = float(p_to[0] - p_from[0]); dy = float(p_to[1] - p_from[1])
-        return math.atan2(dy, dx)
-
-    if s_theta_deg is None:
-        s_theta = _heading_rad(start_xy, pick_xy) if pick_xy != start_xy else 0.0
-    else:
-        s_theta = math.radians(s_theta_deg)
-
     theta_pick = _heading_rad(start_xy, pick_xy)
     theta_drop = _heading_rad(pick_xy, drop_xy)
 
-    # --- Build path (no offsets, no pre-align) ---
+    # --- Build path (no start point) ---
+    # MODIFIED: Path no longer includes the robot's starting position.
     path_points: list[list[int | float | str]] = []
-    # path_points.append([start_xy[0], start_xy[1], float(s_theta), 0])
     path_points.append([pick_xy[0],  pick_xy[1],  float(theta_pick), "close"])
     path_points.append([drop_xy[0],  drop_xy[1],  float(theta_drop), "open"])
 

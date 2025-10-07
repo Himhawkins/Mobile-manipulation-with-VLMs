@@ -127,7 +127,8 @@ def _trace_append_point(json_path: str, robot_id: int, x: float, y: float):
     entry["points"].append([int(round(x)), int(round(y))])
     try:
         with open(json_path, "w") as f:
-            json.dump(data, f)
+            # Add indent=2 for pretty-printing
+            json.dump(data, f, indent=2)
     except Exception as e:
         print(f"[WARN] trace write failed: {e}")
 
@@ -136,40 +137,33 @@ def _astar_dump_clear(json_path: str, robot_id: int):
     """Remove all segments for this robot from the dump file."""
     try:
         os.makedirs(os.path.dirname(json_path), exist_ok=True)
-        if not os.path.exists(json_path):
-            with open(json_path, "w") as f:
-                json.dump({"robots": []}, f)
-            return
-
-        with open(json_path, "r") as f:
-            data = json.load(f)
-        if not isinstance(data, dict) or "robots" not in data:
-            data = {"robots": []}
+        data = {"robots": []}
+        if os.path.exists(json_path):
+            try:
+                with open(json_path, "r") as f:
+                    loaded_data = json.load(f)
+                    if isinstance(loaded_data, dict) and "robots" in loaded_data:
+                        data = loaded_data
+            except (json.JSONDecodeError, FileNotFoundError):
+                # If file is corrupt, empty, or gone, we'll just overwrite it.
+                pass
 
         rid = int(robot_id)
-        data["robots"] = [r for r in data["robots"] if int(r.get("id", -1)) != rid]
+        # Safely get the list of robots and filter it.
+        robots_list = data.get("robots", [])
+        data["robots"] = [r for r in robots_list if int(r.get("id", -1)) != rid]
 
         with open(json_path, "w") as f:
-            json.dump(data, f)
+            # Add indent=2 for pretty-printing
+            json.dump(data, f, indent=2)
+            
     except Exception as e:
         print(f"[WARN] astar_dump_clear failed: {e}")
 
 
 def _astar_dump_append(json_path: str, robot_id: int, goal_xy, path_pts, *, seg_type="normal"):
     """
-    Append one planned segment:
-      goal_xy: (gx, gy)
-      path_pts: [(x,y),...]
-      seg_type: "normal" or "escape"
-    File layout:
-    {
-      "robots":[
-        {"id": 2, "segments":[
-          {"ts": 1712345678.123, "type":"normal", "goal":[gx,gy], "path":[[x,y],...]}
-        ]},
-        ...
-      ]
-    }
+    Append one planned segment with robust file handling and formatting.
     """
     try:
         os.makedirs(os.path.dirname(json_path), exist_ok=True)
@@ -177,26 +171,27 @@ def _astar_dump_append(json_path: str, robot_id: int, goal_xy, path_pts, *, seg_
         if os.path.exists(json_path):
             try:
                 with open(json_path, "r") as f:
-                    data = json.load(f)
-            except Exception:
+                    loaded_data = json.load(f)
+                    if isinstance(loaded_data, dict) and "robots" in loaded_data:
+                        data = loaded_data
+            except (json.JSONDecodeError, FileNotFoundError):
+                # If file is corrupt or gone, start fresh
                 pass
-        if not isinstance(data, dict):
-            data = {"robots": []}
-        if "robots" not in data or not isinstance(data["robots"], list):
-            data["robots"] = []
 
         rid = int(robot_id)
         entry = None
-        for r in data["robots"]:
+        # Safely get the list of robots to iterate through
+        for r in data.get("robots", []):
             try:
                 if int(r.get("id", -1)) == rid:
                     entry = r
                     break
-            except Exception:
+            except (ValueError, TypeError):
                 continue
+                
         if entry is None:
             entry = {"id": rid, "segments": []}
-            data["robots"].append(entry)
+            data.setdefault("robots", []).append(entry)
 
         seg = {
             "type": seg_type,
@@ -206,7 +201,8 @@ def _astar_dump_append(json_path: str, robot_id: int, goal_xy, path_pts, *, seg_
         entry.setdefault("segments", []).append(seg)
 
         with open(json_path, "w") as f:
-            json.dump(data, f)
+            # Add indent=2 for pretty-printing
+            json.dump(data, f, indent=2)
     except Exception as e:
         print(f"[WARN] astar_dump_append failed: {e}")
 
@@ -1015,72 +1011,72 @@ class PIDController:
                 self._seg_index = 0
                 continue
             
-            # # --- NEW: Instant Stop Safety Check ---
-            # # This check runs on every tick for immediate reaction. It verifies that the
-            # # direct line to the *next immediate waypoint* is clear using the latest
-            # # obstacle map.
-            # if self._seg_path and self._seg_index < len(self._seg_path):
-            #     current_pos_tuple = (x, y)
-            #     next_waypoint = self._seg_path[self._seg_index]
-
-            #     # Perform a fast check against the robot's "no-go" zone mask.
-            #     # self.cache.mask_for_line is already dilated to account for the robot's width.
-            #     is_immediate_path_obstructed = _line_blocked_multi(
-            #         [self.cache.mask_for_line],
-            #         current_pos_tuple,
-            #         next_waypoint
-            #     )
-
-            #     if is_immediate_path_obstructed:
-            #         _dbg(f"INSTANT_STOP: Path to waypoint {self._seg_index} is obstructed. Stopping and forcing replan.", self._tick)
-            #         # 1. Stop the robot immediately. This is the core of the change.
-            #         self.iface.write_wheel_command(self.speed_neutral, self.speed_neutral)
-                    
-            #         # 2. Invalidate the current path. This signals the main logic to
-            #         #    trigger a full A* replan on the next iteration.
-            #         self._seg_path = None
-            #         self._seg_index = 0
-                    
-            #         # 3. A small pause to prevent a high-CPU spin if the robot is
-            #         #    completely boxed-in and replanning fails repeatedly.
-            #         time.sleep(0.05) 
-                    
-            #         # 4. Skip the rest of this loop's logic (which would move the robot).
-            #         continue
-            # --- END: Instant Stop Safety Check ---
-            
-            ## TEST THIS LATER
-            # --- MODIFIED: Proactive Full-Path Safety Check ---
-            # This version checks the entire remaining path on every tick.
-            # WARNING: This is computationally more expensive than the immediate-only check
-            # and may slow down the control loop if paths are long.
+            # --- NEW: Instant Stop Safety Check ---
+            # This check runs on every tick for immediate reaction. It verifies that the
+            # direct line to the *next immediate waypoint* is clear using the latest
+            # obstacle map.
             if self._seg_path and self._seg_index < len(self._seg_path):
-                is_path_obstructed = False
-                # Start the check from the robot's current physical location.
-                last_valid_point = (x, y)
-                
-                # Loop through all remaining waypoints in the current path segment.
-                for i in range(self._seg_index, len(self._seg_path)):
-                    next_waypoint = self._seg_path[i]
-                    if _line_blocked_multi([self.cache.mask_for_line], last_valid_point, next_waypoint):
-                        _dbg(f"PROACTIVE_STOP: Future path segment to waypoint {i} is obstructed. Stopping.", self._tick)
-                        is_path_obstructed = True
-                        break # Found a blockage, no need to check further.
-                    
-                    # The end of this segment becomes the start of the next check.
-                    last_valid_point = next_waypoint
+                current_pos_tuple = (x, y)
+                next_waypoint = self._seg_path[self._seg_index]
 
-                if is_path_obstructed:
-                    # Same stop-and-replan logic as before.
+                # Perform a fast check against the robot's "no-go" zone mask.
+                # self.cache.mask_for_line is already dilated to account for the robot's width.
+                is_immediate_path_obstructed = _line_blocked_multi(
+                    [self.cache.mask_for_line],
+                    current_pos_tuple,
+                    next_waypoint
+                )
+
+                if is_immediate_path_obstructed:
+                    _dbg(f"INSTANT_STOP: Path to waypoint {self._seg_index} is obstructed. Stopping and forcing replan.", self._tick)
+                    # 1. Stop the robot immediately. This is the core of the change.
                     self.iface.write_wheel_command(self.speed_neutral, self.speed_neutral)
                     
+                    # 2. Invalidate the current path. This signals the main logic to
+                    #    trigger a full A* replan on the next iteration.
                     self._seg_path = None
                     self._seg_index = 0
                     
+                    # 3. A small pause to prevent a high-CPU spin if the robot is
+                    #    completely boxed-in and replanning fails repeatedly.
                     time.sleep(0.05) 
                     
+                    # 4. Skip the rest of this loop's logic (which would move the robot).
                     continue
-            # --- END: Proactive Full-Path Safety Check ---
+            # --- END: Instant Stop Safety Check ---
+            
+            ## TEST THIS LATER
+            # # --- MODIFIED: Proactive Full-Path Safety Check ---
+            # # This version checks the entire remaining path on every tick.
+            # # WARNING: This is computationally more expensive than the immediate-only check
+            # # and may slow down the control loop if paths are long.
+            # if self._seg_path and self._seg_index < len(self._seg_path):
+            #     is_path_obstructed = False
+            #     # Start the check from the robot's current physical location.
+            #     last_valid_point = (x, y)
+                
+            #     # Loop through all remaining waypoints in the current path segment.
+            #     for i in range(self._seg_index, len(self._seg_path)):
+            #         next_waypoint = self._seg_path[i]
+            #         if _line_blocked_multi([self.cache.mask_for_line], last_valid_point, next_waypoint):
+            #             _dbg(f"PROACTIVE_STOP: Future path segment to waypoint {i} is obstructed. Stopping.", self._tick)
+            #             is_path_obstructed = True
+            #             break # Found a blockage, no need to check further.
+                    
+            #         # The end of this segment becomes the start of the next check.
+            #         last_valid_point = next_waypoint
+
+            #     if is_path_obstructed:
+            #         # Same stop-and-replan logic as before.
+            #         self.iface.write_wheel_command(self.speed_neutral, self.speed_neutral)
+                    
+            #         self._seg_path = None
+            #         self._seg_index = 0
+                    
+            #         time.sleep(0.05) 
+                    
+            #         continue
+            # # --- END: Proactive Full-Path Safety Check ---
             
             cur_wp = self._seg_path[min(self._seg_index, len(self._seg_path)-1)]
             tx, ty = float(cur_wp[0]), float(cur_wp[1])
@@ -1285,6 +1281,9 @@ class PIDController:
             self.iface.log_error(dist_to_wp, ang_err)
 
         self.iface.write_wheel_command(self.speed_neutral, self.speed_neutral)
+
+        _astar_dump_clear(self.astar_dump_path, self._robot_id_for_dump)
+
         print("Controller finished.")
         return True
 
@@ -1453,8 +1452,15 @@ def stop_robot_thread(robot_id: int, join_timeout: float = 5.0):
             _robot_threads.pop(robot_id, None)
     if still_alive:
         return f"Stop requested; robot {robot_id} is still stopping"
+        
     trace_path = str(Path("Data") / "trace_paths.json")
     _clear_trace_file(trace_path)
+    
+    # --- ADD THESE TWO LINES ---
+    astar_dump_path = str(Path("Data") / "astar_segments.json")
+    _astar_dump_clear(astar_dump_path, robot_id)
+    # ---------------------------
+
     return f"Stopped thread for robot {robot_id}"
 
 if __name__ == "__main__":

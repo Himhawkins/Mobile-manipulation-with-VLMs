@@ -112,6 +112,9 @@ def open_all_cameras(
         # Target resolution & FPS (may be clamped by driver/camera)
         cap.set(cv2.CAP_PROP_FRAME_WIDTH,  width)
         cap.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
+        cap.set(cv2.CAP_PROP_AUTOFOCUS, 0)
+        cap.set(cv2.CAP_PROP_AUTO_EXPOSURE, 0)
+        cap.set(cv2.CAP_PROP_AUTO_WB, 0)
         cap.set(cv2.CAP_PROP_FPS,          fps)
 
         # Keep buffer tiny to reduce lag (not honored everywhere)

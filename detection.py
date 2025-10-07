@@ -354,7 +354,8 @@ def detect_realtime_obstacles(frame_bgr: np.ndarray,
                               save_path: str = "Data/realtime_obstacles.txt",
                               ref_path: str = "Data/frame_img.png",
                               robot_path: str = "Data/robot_pos.txt",
-                              robot_padding: int = 0):
+                              robot_padding: int = 0,
+                              robot_radius: int = 20):
     """
     Compare current frame against reference image on disk and save obstacles.
     Skips any obstacle whose bbox contains ANY robot (x,y) loaded from robot_pos.txt.
@@ -396,15 +397,32 @@ def detect_realtime_obstacles(frame_bgr: np.ndarray,
     robots = _read_robot_positions(robot_path)  # list[{"id","x","y","theta"}]
 
     def _bbox_contains_any_robot(x, y, w, h):
+        """Return True if the rectangle (x,y,w,h) overlaps any robot's
+        point OR a circle of radius r around it (r from robot or default).
+        Padding is applied to the rectangle first, then overlap is tested.
+        """
         if not robots:
             return False
+
+        # padded rectangle
         x0 = x - robot_padding
         y0 = y - robot_padding
         x1 = x + w + robot_padding
         y1 = y + h + robot_padding
-        for r in robots:
-            rx, ry = r["x"], r["y"]
-            if x0 <= rx <= x1 and y0 <= ry <= y1:
+
+        for rbt in robots:
+            rx, ry = float(rbt["x"]), float(rbt["y"])
+            r = float(rbt.get("radius", robot_radius))
+
+            # circle-rectangle overlap test:
+            # find closest point on rect to circle center, then test distance
+            cx = min(max(rx, x0), x1)
+            cy = min(max(ry, y0), y1)
+            dx = rx - cx
+            dy = ry - cy
+
+            # if r==0 this reduces to "point inside rectangle"
+            if dx*dx + dy*dy <= r*r:
                 return True
         return False
 
