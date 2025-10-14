@@ -248,7 +248,9 @@ class PIDController:
         sx, sy = int(np.clip(sx, 0, W-1)), int(np.clip(sy, 0, H-1))
         if mask_dil[sy, sx] == 0: return None # Not stuck
 
-        km = self.cache.kernel_erode
+        # km = self.cache.kernel_erode
+        lm = int(getattr(self.cache, "line_margin_px", 1))
+        km = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (2*lm + 1, 2*lm + 1))
         bubble_r = max(8, self.cache.spacing_px + 4)
         inflated2, line2 = _make_escape_masks(mask_raw, mask_dil, sx, sy, r=bubble_r, kernel_erode=km)
 
@@ -371,7 +373,7 @@ class PIDController:
             if is_gripper_action and self._grip_state is None:
                 theta_dyn = math.atan2(goal_y - y, goal_x - x)
                 pre_xy, cen_xy = _grip_pre_approach(goal_x, goal_y, theta_dyn, self.gripper_offset_px, self.gripper_pre_approach_extra_px)
-                self._grip_state = {"pre": pre_xy, "cen": cen_xy, "theta": theta_dyn, "stage": "to_pre"}
+                self._grip_state = {"pre": pre_xy, "cen": cen_xy, "theta": theta_dyn, "stage": "pre"}
                 self._seg_path = None # Force replan to pre-approach point
 
             # Determine the current planning goal based on gripper state
@@ -405,9 +407,15 @@ class PIDController:
 
                     if is_gripper_action and self._grip_state:
                         # --- Gripper State Machine ---
-                        if self._grip_state["stage"] == "to_pre":
-                            self._grip_state["stage"] = "cen" # Use "cen" as key
-                            self._seg_path = None # Force replan to final center point
+                        if self._grip_state["stage"] == "pre":
+                            # Pre-open only for a pick (final action == "close")
+                            if action == "close":
+                                _dbg("GRIPPER: pre-open at pre point", tick=self._tick)
+                                self._do_gripper_action("open")
+                                self._pause_at_checkpoint(self.gripper_action_pause_s, stop_event)
+                            # Move to the center stage next
+                            self._grip_state["stage"] = "cen"
+                            self._seg_path = None  # Force replan to final center point
                             continue
                         elif self._grip_state["stage"] == "cen":
                             _dbg(f"GRIPPER: {action}", tick=self._tick)

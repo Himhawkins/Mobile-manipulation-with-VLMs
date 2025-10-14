@@ -68,12 +68,13 @@ import time
 import platform
 import cv2
 
+#1280X960
 def open_all_cameras(
     settings,
     test_read=True,
     warmup_frames=3,
-    width=1280,
-    height=960,
+    width=800,
+    height=600,
     fps=15,
     retries=3,
     reopen_once=True
@@ -731,6 +732,17 @@ def open_cell_config_popup(parent, row, col, camera_options):
             # Extract number from 'Camera 0', 'Camera 2', etc.
             cam_index = int(selected_cam.get().split()[-1])
             cap[0] = cv2.VideoCapture(cam_index, cv2.CAP_V4L2)
+
+            # --- Add this block here ---
+            # fourcc = cv2.VideoWriter_fourcc(*'MJPG')
+            # cap[0].set(cv2.CAP_PROP_FOURCC, fourcc)
+            cap[0].set(cv2.CAP_PROP_FRAME_WIDTH,  800)
+            cap[0].set(cv2.CAP_PROP_FRAME_HEIGHT, 600)
+            cap[0].set(cv2.CAP_PROP_FPS, 15)
+            time.sleep(0.05)
+            for _ in range(3):
+                cap[0].read()
+
         except Exception as e:
             print(f"Camera error: {e}")
 

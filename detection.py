@@ -2,6 +2,7 @@
 import os
 import moondream as md
 import cv2
+import json
 import numpy as np
 from PIL import Image
 from dotenv import load_dotenv
@@ -85,34 +86,40 @@ def detect_and_get_bbox(img_path="Data/frame_img.png", prompt="Blue Circles", sa
 def detect_obstacles(
     img_path: str = "Data/frame_img.png",
     prompt: str = "Blue Circles",
-    save_path: str | None = None,
-    sections: Union[int, Tuple[int, int]] = 1,
+    save_path: str = "Data/obstacles.txt",
+    arena_settings_path: str = "Settings/arena_settings.json",
 ):
     """
-    Detect obstacles with the VLM by dividing the image into sections (optional).
-    Returns list of 4-corner rectangles in full-image coords.
+    Detect obstacles with the VLM by dividing the image according to
+    arena_settings.json (rows, cols). Returns list of 4-corner rectangles
+    in full-image coordinates.
     """
     frame = cv2.imread(img_path)
-    if frame is None:
+    gray_image = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+    blurred = cv2.GaussianBlur(gray_image, (5, 5), 0)
+    frame = blurred
+    if blurred is None:
         raise FileNotFoundError(f"Could not read image at '{img_path}'")
 
-    H, W = frame.shape[:2]
+    H, W = blurred.shape[:2]
 
-    # Normalize sections to (rows, cols)
-    if isinstance(sections, int):
-        if sections < 1:
-            raise ValueError("sections must be >= 1")
-        rows, cols = 1, sections
-    else:
-        if not (isinstance(sections, (tuple, list)) and len(sections) == 2):
-            raise ValueError("sections must be an int or a (rows, cols) tuple")
-        rows, cols = int(sections[0]), int(sections[1])
+    # --- Load sectioning info from arena_settings.json ---
+    rows, cols = 1, 1  # fallback
+    try:
+        with open(arena_settings_path, "r") as f:
+            data = json.load(f)
+        rows = int(data.get("rows", rows))
+        cols = int(data.get("cols", cols))
         if rows < 1 or cols < 1:
-            raise ValueError("rows and cols in sections must be >= 1")
+            rows, cols = 1, 1
+    except Exception as e:
+        # Keep fallback (1,1) if file missing or invalid
+        # print(f"[warn] using default (rows,cols)=(1,1): {e}")
+        pass
 
     merged_obstacles: List[List[Tuple[int, int]]] = []
 
-    # Compute tile bounds and run detection per tile
+    # --- Divide blurred into tiles and run detection per tile ---
     for r in range(rows):
         y0 = (H * r) // rows
         y1 = (H * (r + 1)) // rows if r < rows - 1 else H
@@ -120,25 +127,28 @@ def detect_obstacles(
             x0 = (W * c) // cols
             x1 = (W * (c + 1)) // cols if c < cols - 1 else W
 
-            tile = frame[y0:y1, x0:x1]
+            tile = blurred[y0:y1, x0:x1]
             if tile.size == 0:
                 continue
 
+            # Run your existing detector (assumed available)
             objects, _ = detect_and_list(tile, prompt)
 
-            # Offset local tile bboxes into global image coords and store as corners
+            # Convert local bbox coords to global image coords
             for obj in objects:
                 x, y, w, h = obj["bbox"]
                 gx, gy = x + x0, y + y0
                 corners = [
-                    (gx, gy),             # TL
-                    (gx + w, gy),         # TR
-                    (gx + w, gy + h),     # BR
-                    (gx, gy + h)          # BL
+                    (gx,      gy),        # TL
+                    (gx + w,  gy),        # TR
+                    (gx + w,  gy + h),    # BR
+                    (gx,      gy + h)     # BL
                 ]
                 merged_obstacles.append(corners)
 
+    # --- Optionally save to file ---
     if save_path is not None:
+        os.makedirs(os.path.dirname(save_path) or ".", exist_ok=True)
         with open(save_path, "w") as f:
             for corners in merged_obstacles:
                 line = ",".join(f"({x},{y})" for (x, y) in corners)

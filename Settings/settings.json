@@ -1,4 +1,6 @@
 {
   "serial_port": "/dev/ttyACM0",
-  "obstacle_prompt": "Black Rectangles with NO white space"
+  "obstacle_prompt": "Detect black/very-dark rectangular tape/paper patches",
+  "arena_width": "1500",
+  "arena_height": "500"
 }

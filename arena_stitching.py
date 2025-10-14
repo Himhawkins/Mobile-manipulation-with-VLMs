@@ -203,56 +203,50 @@ def find_robots_in_arena(settings, caps, save_path=None, append=False):
         return None, {}, {}
 
     processed_frames = {}
-    # accumulate per-id measurements
-    pos_acc = {}   # id -> list of (x,y)
-    ang_acc = {}   # id -> list of theta
+    pos_acc, ang_acc = {}, {}
 
     for r_idx, row_list in enumerate(image_grid):
         for c_idx, img in enumerate(row_list):
-            processed_img, dets = detect_robot_poses(
-                img, current_overlap, r_idx, c_idx
-            )
-
-            # optional dashed inset border, keeping your style
+            processed_img, dets = detect_robot_poses(img, current_overlap, r_idx, c_idx)
             processed_img = draw_inset_dashed_border(processed_img, current_overlap)
             processed_frames[f"{r_idx},{c_idx}"] = processed_img
 
             for d in dets:
                 mid = d["id"]
-                if mid == 0:   # <-- ignore robot ID 0
+                if mid == 0:
                     continue
                 pos_acc.setdefault(mid, []).append((d["x"], d["y"]))
                 ang_acc.setdefault(mid, []).append(d["theta"])
 
-    # merge sightings: mean of x/y, circular mean for theta
     merged = {}
     for mid in pos_acc.keys():
         xs = [p[0] for p in pos_acc[mid]]
         ys = [p[1] for p in pos_acc[mid]]
-
-        # circular mean for angles
         cs = np.mean(np.cos(ang_acc[mid]))
         ss = np.mean(np.sin(ang_acc[mid]))
         theta_mean = float(np.arctan2(ss, cs))
         theta_mean = (theta_mean + np.pi) % (2 * np.pi) - np.pi
-
         merged[mid] = {
             "x": int(round(np.mean(xs))),
             "y": int(round(np.mean(ys))),
             "theta": theta_mean,
         }
 
-    # write to file if requested
-    if save_path is not None and len(merged) > 0:
-        mode = "a" if append else "w"
+    # ---- SAVE DETECTIONS ----
+    if save_path is not None:
         os.makedirs(os.path.dirname(save_path), exist_ok=True) if os.path.dirname(save_path) else None
-        with open(save_path, mode) as f:
-            for mid in sorted(merged.keys()):
-                m = merged[mid]
-                f.write(f"{mid},{m['x']},{m['y']},{m['theta']}\n")
+
+        if len(merged) == 0:
+            # Clear file when no robots detected
+            open(save_path, "w").close()
+        else:
+            mode = "a" if append else "w"
+            with open(save_path, mode) as f:
+                for mid in sorted(merged.keys()):
+                    m = merged[mid]
+                    f.write(f"{mid},{m['x']},{m['y']},{m['theta']}\n")
 
     return stitched_img, processed_frames, merged
-
 
 # --- Main Loop ---
 if __name__ == "__main__":
@@ -263,7 +257,7 @@ if __name__ == "__main__":
         print("No cameras available")
         exit()
 
-    robot_marker_id = 782
+    robot_marker_id = 3
 
     try:
         while True:
