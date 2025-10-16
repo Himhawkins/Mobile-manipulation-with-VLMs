@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vision Dashboard</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <div class="dashboard-container">
+        <div class="control-panel">
+            <h2>Vision Dashboard</h2>
+
+            <div class="panel-section">
+                <h3>AI Agent</h3>
+                <div class="input-group">
+                    <select id="agent-menu"></select>
+                    <button id="edit-agent-btn">Edit</button>
+                </div>
+            </div>
+
+            <div class="panel-section">
+                <h3>Calibration</h3>
+                <input type="text" id="prompt-entry" placeholder="Calibration prompt, e.g., 'black box'">
+                <button id="calibrate-btn" class="action-btn">Calibrate Arena</button>
+            </div>
+
+            <div class="panel-section">
+                <h3>Robot Execution</h3>
+                <div class="input-group">
+                    <select id="serial-menu"></select>
+                    <button id="refresh-ports-btn">⟳</button>
+                </div>
+                <button id="execute-btn" class="execute-btn">Execute</button>
+            </div>
+            
+            <div id="status-message" class="status-message"></div>
+        </div>
+
+        <div class="video-panel">
+            <img id="video-feed" src="{{ url_for('video_feed') }}" alt="Video Stream">
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+</body>
+</html>

@@ -1,0 +1,28 @@
+{
+  "rows": 1,
+  "cols": 2,
+  "cells": {
+    "0,0": {
+      "camera": 0,
+      "width": 640,
+      "height": 480,
+      "rotation": 0,
+      "overlap": 50,
+      "topLeft": [ 110, 80 ],
+      "topRight": [ 750, 85 ],
+      "bottomRight": [ 755, 505 ],
+      "bottomLeft": [ 105, 500 ]
+    },
+    "0,1": {
+      "camera": 2,
+      "width": 640,
+      "height": 480,
+      "rotation": 0,
+      "overlap": 0,
+      "topLeft": [ 50, 90 ],
+      "topRight": [ 690, 85 ],
+      "bottomRight": [ 695, 515 ],
+      "bottomLeft": [ 45, 510 ]
+    }
+  }
+}

@@ -13,7 +13,9 @@ import numpy as np
 
 from astar import PathPlanner
 from motion import start_move_robot_thread, send_gripper_once  # NEW
+from Utilities.rpc_system import RPCClient
 
+rpc=RPCClient()
 
 # Global registry of running robot threads
 _robot_threads = {}  # { robot_id: {
@@ -766,7 +768,7 @@ def _plan_segment_cached(cache: PlannerCache, start_xy, goal_xy,
     return None
 
 # ---------- PID Controller ----------
-class PIDController:
+class PIDController:y
     def __init__(
         self, iface: FileInterface,
         Kp_dist=0.18, Kp_ang=3.0, Ki_ang=0.02, Kd_ang=0.9,
@@ -969,7 +971,7 @@ class PIDController:
                 nxt = (int(self._seg_path[self._seg_index][0]), int(self._seg_path[self._seg_index][1]))
                 if self._escape_line_mask is None or _bresenham_blocked(self._escape_line_mask, cur, nxt):
                     _dbg(f"ESCAPE_LINE_BLOCKED: {cur}->{nxt} — recomputing escape.", self._tick)
-                    self._seg_path = None
+                    self._seg_path = None   
             if self._seg_path is None:
                 path = self._try_escape_plan((sx, sy))
                 if not path:
