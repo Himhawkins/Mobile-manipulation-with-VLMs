@@ -2,12 +2,16 @@ import cv2
 import time
 import threading
 
+G_read=False
+
 class CameraStream:
     """
     A threaded wrapper for a cv2.VideoCapture object to get the latest frame.
     """
     def __init__(self, src=0):
         self.stream = cv2.VideoCapture(src)
+        self.stream.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc('M','J','P','G')) #very important, frames lag severly otherwise
+        self.stream.set(cv2.CAP_PROP_AUTOFOCUS, 0.1) 
         if not self.stream.isOpened():
             print(f"[ERROR] Could not open camera {src}.")
             return
@@ -23,11 +27,20 @@ class CameraStream:
 
     def update(self):
         """The target function for the reading thread."""
+        
         while not self.stopped:
             if not self.stream.isOpened():
                 self.stop()
                 continue
+            # global G_read   
+            # while G_read is True:
+            #     time.sleep(1/100)
+            G_read=True    
             self.ret, self.frame = self.stream.read()
+            if not self.ret:
+                print("End of video stream or error reading frame.")
+                break
+            G_read=False
 
     def read(self):
         """Return the most recent frame."""
@@ -53,6 +66,7 @@ class CameraManager:
         stream = self.streams.get(cam_id)
         # The read() method in our class now returns the latest frame
         return stream.read() if stream else None
+        
 
     def get_open_streams(self) -> dict:
         return self.streams

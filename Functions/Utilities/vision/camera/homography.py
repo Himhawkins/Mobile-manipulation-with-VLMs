@@ -7,22 +7,34 @@ import os
 # --- Board Details ---
 
 # --- Camera Details ---
-CAMERA_ID = 2      
+CAMERA_ID = 4
 
-CHARUCO_SQUARES_X = 5       # How many squares wide is your board?
-CHARUCO_SQUARES_Y = 7       # How many squares tall is your board?
-ARUCO_DICT = aruco.getPredefinedDictionary(aruco.DICT_4X4_250)
-
-# IMPORTANT: You MUST measure your new printed board and update these values
-# The size of a single square's side that you measured in millimeters
-SQUARE_SIZE_MM = 34 
-# The size of the ArUco marker's side that you measured in millimeters
-MARKER_SIZE_MM = 26 
          # Use 2 for the camera
 
 # --- ArUco Dictionary ---
 ARUCO_DICT = aruco.getPredefinedDictionary(aruco.DICT_4X4_250)
 
+k=305
+actual_objs={0:[0,0,0],
+             1:[-3,0,0],
+             2:[-7,0,0],
+             3:[-7,3,0],
+             4:[-3,3,0],
+             5:[6,0,0],
+             6:[3,0,0],
+             7:[3,2,0],
+             8:[6,2,0]}
+
+for i in actual_objs.keys():
+    t=actual_objs[i]
+    u=[]
+    u.append([k*t[0]+30,k*t[1]-20,k*t[2]])
+    u.append([k*t[0]+30+143,k*t[1]-20,k*t[2]])
+    u.append([k*t[0]+30+143,k*t[1]-20-143,k*t[2]])
+    u.append([k*t[0]+30,k*t[1]-20-143,k*t[2]])
+    
+    actual_objs[i]=np.array(u,dtype=np.float32)
+print(actual_objs)
 
 def find_homography_live():
     """
@@ -46,12 +58,7 @@ def find_homography_live():
     detector_params = aruco.DetectorParameters()
     detector_params.cornerRefinementMethod = aruco.CORNER_REFINE_SUBPIX
     
-    charuco_board = aruco.CharucoBoard(
-        (CHARUCO_SQUARES_X, CHARUCO_SQUARES_Y),
-        SQUARE_SIZE_MM,
-        MARKER_SIZE_MM,
-        ARUCO_DICT
-    )
+
     aruco_detector = aruco.ArucoDetector(ARUCO_DICT, detectorParams=detector_params)
 
     # --- Start Camera ---
@@ -62,7 +69,7 @@ def find_homography_live():
         
     # Set camera focus
     cap.set(cv2.CAP_PROP_AUTOFOCUS, 0) 
-    cap.set(cv2.CAP_PROP_FOCUS, 255)
+    cap.set(cv2.CAP_PROP_FOCUS, 0)
 
     print("\n--- Live Homography Setup ---")
     print("Place the ChArUco board flat on the floor.")
@@ -108,11 +115,11 @@ def find_homography_live():
             obj_points = []
             img_points = []
 
-            board_obj_points = charuco_board.getObjPoints()
-            print(board_obj_points)
+            # board_obj_points = charuco_board.getObjPoints()
+            # print(board_obj_points)
             for i, marker_id in enumerate(last_seen_ids.flatten()):
-                if marker_id < len(board_obj_points):
-                    obj_points.append(board_obj_points[marker_id])
+                if marker_id in actual_objs.keys():
+                    obj_points.append(actual_objs[marker_id])
                     img_points.append(last_seen_corners[i])
             
             if len(obj_points) < 4:
@@ -150,6 +157,7 @@ def find_homography_live():
                 # --- END: Error Calculation ---
 
                 print(homography_matrix)
+                save_homography(homography_matrix)
                 break
             else:
                 print("Could not calculate homography.")
@@ -160,6 +168,39 @@ def find_homography_live():
     if homography_matrix is None:
         print("Homography was not set.")
         return None
+    
+def save_homography(homography_matrix, camera_id=CAMERA_ID):
+    """
+    Saves the calculated homography matrix to an NPZ file.
+    """
+    filepath = f"homography_matrix_{camera_id}.npz"
+    print(f"Saving homography matrix to {filepath}...")
+    try:
+        np.savez_compressed(filepath, homography=homography_matrix)
+        print("Homography matrix saved successfully.")
+    except Exception as e:
+        print(f"Error saving homography matrix: {e}")
+
+def load_homography(camera_id):
+    """
+    Loads a previously saved homography matrix from an NPZ file.
+    Returns the matrix or None if the file is not found or corrupted.
+    """
+    filepath = f"homography_matrix_{camera_id}.npz"
+    if not os.path.exists(filepath):
+        print(f"Homography file '{filepath}' not found.")
+        return None
+    
+    print(f"Loading homography matrix from {filepath}...")
+    try:
+        data = np.load(filepath)
+        homography_matrix = data['homography']
+        print("Homography matrix loaded successfully.")
+        return homography_matrix
+    except Exception as e:
+        print(f"Error loading homography matrix: {e}")
+        return None
+
 
     # --- Define the final transformation function ---
     def get_planar_coords(pixel_coord):

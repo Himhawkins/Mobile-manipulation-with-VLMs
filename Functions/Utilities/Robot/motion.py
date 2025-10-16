@@ -94,8 +94,9 @@ def move_robot(
             right_out = right_speed
 
             _send_wheel_command(ser, id, left_out, right_out)
-            if isinstance(command[2+i*3], (int, float)) and command[2+i*3] > 0:
-                time.sleep(command[2+i*3] / 1000.0)
+            if isinstance(command[2+i*3], (int, float)):
+                if command[2+i*3] > 0:
+                    time.sleep(command[2+i*3] / 1000.0)
             else:
                 _send_gripper_command(ser, id, command[2+i*3]) 
 

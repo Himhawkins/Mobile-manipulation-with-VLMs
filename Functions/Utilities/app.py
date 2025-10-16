@@ -49,7 +49,7 @@ def generate_video_frames():
         try:
             # Get the latest data packet from the server
             state = client.Data.get_full_state()
-            frame = state['stitched_frame']
+            frame = state['stitched_frame'].copy()
 
             # Draw robot poses
             for mid, pose in state['robot_poses'].items():

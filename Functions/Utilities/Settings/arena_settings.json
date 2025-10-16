@@ -1,28 +1,75 @@
 {
   "rows": 1,
-  "cols": 2,
+  "cols": 3,
   "cells": {
     "0,0": {
-      "camera": 0,
-      "width": 640,
-      "height": 480,
-      "rotation": 0,
-      "overlap": 50,
-      "topLeft": [ 110, 80 ],
-      "topRight": [ 750, 85 ],
-      "bottomRight": [ 755, 505 ],
-      "bottomLeft": [ 105, 500 ]
+      "camera": 4,
+      "width": 500,
+      "height": 500,
+      "rotation": 180,
+      "overlap": 60,
+      "topLeft": [
+        83,
+        64
+      ],
+      "topRight": [
+        660,
+        36
+      ],
+      "bottomLeft": [
+        75,
+        554
+      ],
+      "bottomRight": [
+        685,
+        533
+      ]
     },
     "0,1": {
       "camera": 2,
-      "width": 640,
-      "height": 480,
+      "width": 500,
+      "height": 500,
+      "rotation": 180,
+      "overlap": 60,
+      "topLeft": [
+        161,
+        73
+      ],
+      "topRight": [
+        613,
+        78
+      ],
+      "bottomLeft": [
+        137,
+        516
+      ],
+      "bottomRight": [
+        624,
+        526
+      ]
+    },
+    "0,2": {
+      "camera": 6,
+      "width": 500,
+      "height": 500,
       "rotation": 0,
-      "overlap": 0,
-      "topLeft": [ 50, 90 ],
-      "topRight": [ 690, 85 ],
-      "bottomRight": [ 695, 515 ],
-      "bottomLeft": [ 45, 510 ]
+      "overlap": 60,
+      "topLeft": [
+        245,
+        26
+      ],
+      "topRight": [
+        707,
+        44
+      ],
+      "bottomLeft": [
+        230,
+        523
+      ],
+      "bottomRight": [
+        724,
+        510
+      ]
     }
   }
 }

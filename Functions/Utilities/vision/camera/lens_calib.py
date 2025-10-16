@@ -55,8 +55,8 @@ def calibrate_camera_interactive():
         print(f"Error: Could not open camera with ID {CAMERA_ID}.")
         return None, None
 
-    cap.set(cv2.CAP_PROP_AUTOFOCUS, 0) 
-    cap.set(cv2.CAP_PROP_FOCUS, 255) 
+    cap.set(cv2.CAP_PROP_AUTOFOCUS, 0.1) 
+    # cap.set(cv2.CAP_PROP_FOCUS, 255) 
 
     cv2.namedWindow('Camera Calibration')
     cv2.namedWindow('Threshold Settings')
